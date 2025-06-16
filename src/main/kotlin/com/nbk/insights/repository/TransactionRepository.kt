@@ -4,11 +4,10 @@ import jakarta.persistence.*
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.stereotype.Repository
 import java.math.BigDecimal
-import java.math.BigInteger
-import java.time.LocalDate
+import java.time.LocalDateTime
 
 @Repository
-interface TransactionRepository: JpaRepository<TransactionEntity, Long> {
+interface TransactionRepository : JpaRepository<TransactionEntity, Long> {
     fun findById(id: Long?): TransactionEntity
 }
 
@@ -23,11 +22,12 @@ data class TransactionEntity(
     @Enumerated(EnumType.STRING)
     val transactionType: TransactionType?,
     val mccId: Long,
-    val createdAt: LocalDate
+    val createdAt: LocalDateTime,
 
-){
-    constructor(): this(0,0, BigDecimal.ZERO, null, 0, LocalDate.now())
+    ) {
+    constructor() : this(0, 0, BigDecimal.ZERO, null, 0, LocalDateTime.now())
 }
-enum class TransactionType{
+
+enum class TransactionType {
     DEPOSIT, DEBIT, TRANSFER, WITHDRAW
 }

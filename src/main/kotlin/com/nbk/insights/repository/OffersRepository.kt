@@ -6,7 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.stereotype.Repository
 
 @Repository
-interface OffersRepository:JpaRepository<OffersEntity,Long>{
+interface OffersRepository : JpaRepository<OffersEntity, Long> {
     fun findById(id: Long?): OffersEntity
 
 }
