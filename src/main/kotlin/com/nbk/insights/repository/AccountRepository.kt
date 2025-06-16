@@ -21,10 +21,10 @@ data class AccountEntity(
     @Enumerated(EnumType.STRING)
     val accountType: AccountType,
     val userId: Long,
-    val accountNumber: BigDecimal,
-    val cardNumber: String = (10000000..99999999).random().toString()
+    val accountNumber: String = "AN"+(10000000..99999999).random().toString(),
+    val cardNumber: String = "CN"+(10000000..99999999).random().toString()
 ){
-    constructor(): this(0, AccountType.MAIN, 0, BigDecimal.ZERO, "")
+    constructor(): this(0, AccountType.MAIN, 0, "", "")
 }
 
 enum class AccountType{
