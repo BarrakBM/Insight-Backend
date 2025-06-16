@@ -22,7 +22,7 @@ data class UserEntity(
     var username: String,
     var password: String,
     var fullName: String,
-    var fcm: String? = null
+    var fcmToken: String? = null
 
     ){
     constructor() : this(null, "", "", "", "")
