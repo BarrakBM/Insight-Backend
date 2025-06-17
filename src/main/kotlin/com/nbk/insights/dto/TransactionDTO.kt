@@ -10,6 +10,11 @@ data class TransactionResponse(
     val destinationAccountId: Long?,
     val amount: BigDecimal,
     val transactionType: TransactionType?,
-    val mccId: Long?,
+    val mcc: MCC,
     val createdAt: LocalDateTime
+)
+
+data class MCC(
+    val category: String,
+    val subCategory: String
 )
