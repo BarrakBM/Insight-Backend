@@ -5,6 +5,7 @@ import com.nbk.insights.dto.authentication.LoginRequest
 import com.nbk.insights.dto.authentication.RegisterRequest
 import com.nbk.insights.repository.UserEntity
 import com.nbk.insights.service.UserService
+import com.nbk.insights.repository.UserRepository
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.authentication.AuthenticationManager
@@ -13,12 +14,14 @@ import org.springframework.security.core.userdetails.UserDetailsService
 import org.springframework.security.core.userdetails.UsernameNotFoundException
 import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.web.bind.annotation.*
+import org.springframework.security.core.context.SecurityContextHolder
 
 @RestController
 @RequestMapping("/auth")
 class AuthController(
     private val authenticationManager: AuthenticationManager,
     private val userDetailsService: UserDetailsService,
+    private val userRepository: UserRepository,
     private val jwtService: JwtService,
     private val usersService: UserService,
     private val passwordEncoder: PasswordEncoder
@@ -51,4 +54,12 @@ class AuthController(
 
     @GetMapping("/users")
     fun listUsers() = mapOf("users" to usersService.getAll())
+
+    @GetMapping("/users/me")
+    fun getCurrentUser(): ResponseEntity<UserEntity> {
+        val username = SecurityContextHolder.getContext().authentication.name
+        val user = userRepository.findByUsername(username)
+            ?: throw UsernameNotFoundException("User not found with email: $username")
+        return ResponseEntity.ok(user)
+    }
 }
