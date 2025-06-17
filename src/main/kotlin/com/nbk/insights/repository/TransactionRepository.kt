@@ -8,7 +8,15 @@ import java.time.LocalDateTime
 
 @Repository
 interface TransactionRepository : JpaRepository<TransactionEntity, Long> {
-    fun findById(id: Long?): TransactionEntity
+    fun findAllBySourceAccountIdInOrDestinationAccountIdIn(
+        sourceAccountIds: List<Long>,
+        destinationAccountIds: List<Long>
+    ): List<TransactionEntity>
+
+    fun findAllBySourceAccountIdOrDestinationAccountId(
+        sourceAccountId: Long?,
+        destinationAccountId: Long?
+    ): List<TransactionEntity>
 }
 
 @Entity
@@ -22,7 +30,7 @@ data class TransactionEntity(
     val amount: BigDecimal,
     @Enumerated(EnumType.STRING)
     val transactionType: TransactionType?,
-    val mccId: Long,
+    val mccId: Long?,
     val createdAt: LocalDateTime,
 
     ) {
