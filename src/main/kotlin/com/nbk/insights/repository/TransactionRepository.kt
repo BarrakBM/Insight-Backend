@@ -8,7 +8,15 @@ import java.time.LocalDateTime
 
 @Repository
 interface TransactionRepository : JpaRepository<TransactionEntity, Long> {
-    fun findById(id: Long?): TransactionEntity
+    fun findAllBySourceAccountIdInOrDestinationAccountIdIn(
+        sourceAccountIds: List<Long>,
+        destinationAccountIds: List<Long>
+    ): List<TransactionEntity>
+
+    fun findAllBySourceAccountIdOrDestinationAccountId(
+        sourceAccountId: Long?,
+        destinationAccountId: Long?
+    ): List<TransactionEntity>
 }
 
 @Entity
@@ -17,17 +25,26 @@ data class TransactionEntity(
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Long? = null,
-    val accountId: Long,
+    val sourceAccountId: Long?,
+    val destinationAccountId: Long?,
     val amount: BigDecimal,
     @Enumerated(EnumType.STRING)
     val transactionType: TransactionType?,
-    val mccId: Long,
+    val mccId: Long?,
     val createdAt: LocalDateTime,
 
     ) {
-    constructor() : this(0, 0, BigDecimal.ZERO, null, 0, LocalDateTime.now())
+    constructor() : this(
+        id = null,
+        sourceAccountId = null,
+        destinationAccountId = null,
+        amount = BigDecimal.ZERO,
+        transactionType = null,
+        mccId = 0,
+        createdAt = LocalDateTime.now()
+    )
 }
 
 enum class TransactionType {
-    DEPOSIT, DEBIT, TRANSFER, WITHDRAW
+    DEBIT, CREDIT, TRANSFER, WITHDRAW
 }
