@@ -13,7 +13,7 @@ class AccountService(
 ){
 
     fun retrieveUserAccounts(userId: Long): AccountsResponse {
-        val accountEntities = accountRepository.findAllByUserId(userId)
+        val accountEntities = accountRepository.findByUserId(userId)
         val accounts = accountEntities.map { entity ->
             Account(
                 accountId = entity.id ?: 0L,
@@ -28,7 +28,7 @@ class AccountService(
     }
 
     fun retrieveTotalBalance(userId: Long): TotalBalanceResponse {
-        val accountEntities = accountRepository.findAllByUserId(userId)
+        val accountEntities = accountRepository.findByUserId(userId)
         val total = accountEntities
             .map { it.balance }
             .fold(BigDecimal.ZERO, BigDecimal::add)
