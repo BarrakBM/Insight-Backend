@@ -8,12 +8,14 @@ import org.springframework.http.ResponseEntity
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.core.userdetails.UsernameNotFoundException
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 
+@RequestMapping("/accounts")
 @RestController
 class AccountController(private val accountService: AccountService, private val userRepository: UserRepository) {
 
-    @GetMapping("/accounts")
+    @GetMapping()
     fun retrieveUserAccounts(): ResponseEntity<AccountsResponse> {
         val username = SecurityContextHolder.getContext().authentication.name
         val userId = userRepository.findByUsername(username)?.id
@@ -21,7 +23,7 @@ class AccountController(private val accountService: AccountService, private val 
         return ResponseEntity.ok(accountService.retrieveUserAccounts(userId = userId))
     }
 
-    @GetMapping("/accounts/total-balance")
+    @GetMapping("/total-balance")
     fun retrieveTotalBalance(): ResponseEntity<TotalBalanceResponse> {
         val username = SecurityContextHolder.getContext().authentication.name
         val userId = userRepository.findByUsername(username)?.id
