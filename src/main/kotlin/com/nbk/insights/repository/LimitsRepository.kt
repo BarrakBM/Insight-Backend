@@ -3,11 +3,13 @@ package com.nbk.insights.repository
 import jakarta.persistence.*
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.stereotype.Repository
+import org.springframework.web.client.HttpClientErrorException
 import java.math.BigDecimal
 
 @Repository
 interface LimitsRepository:JpaRepository<LimitsEntity,Long>{
-    fun findById(id: Long?): LimitsEntity
+    fun findByAccountId(accountId: Long): LimitsEntity?
+    fun findAllByAccountId(accountId: Long): List<LimitsEntity>?
 
 }
 
@@ -22,4 +24,12 @@ data class LimitsEntity(
     val accountId: Long
 ){
     constructor(): this(0, "", BigDecimal.ZERO, 0)
+    @PrePersist
+    @PreUpdate
+    fun validateBalance() {
+        if (amount < BigDecimal.ZERO) {
+            throw IllegalArgumentException("Amount cannot be negative")
+        }
+    }
+
 }

@@ -2,16 +2,22 @@ package com.nbk.insights.service
 
 import com.nbk.insights.dto.Account
 import com.nbk.insights.dto.AccountsResponse
+import com.nbk.insights.dto.Limits
+import com.nbk.insights.dto.ListOfLimitsResponse
 import com.nbk.insights.dto.TotalBalanceResponse
 import com.nbk.insights.repository.AccountRepository
+import com.nbk.insights.repository.LimitsEntity
+import com.nbk.insights.repository.LimitsRepository
 import jakarta.persistence.EntityNotFoundException
+import org.hibernate.query.spi.Limit
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
 
 @Service
 class AccountService(
-    val accountRepository: AccountRepository
-){
+    val accountRepository: AccountRepository,
+    val limitsRepository: LimitsRepository
+) {
 
     fun retrieveUserAccounts(userId: Long): AccountsResponse {
         if (userId <= 0) {
@@ -57,4 +63,55 @@ class AccountService(
 
         return TotalBalanceResponse(total)
     }
+
+    fun setOrUpdateAccountLimit(userId: Long, category: String, amount: BigDecimal, accountId: Long) {
+        val account = accountRepository.findById(accountId).orElseThrow {
+            EntityNotFoundException("Account with ID $accountId not found")
+        }
+
+        if (account.userId != userId) {
+            throw IllegalAccessException("User ID mismatch")
+        }
+
+        val existingLimit = limitsRepository.findByAccountId(accountId)
+
+        val newLimit = existingLimit?.copy(category = category, amount = amount)
+            ?: LimitsEntity(
+                category = category,
+                amount = amount,
+                accountId = accountId
+            )
+
+        limitsRepository.save(newLimit)
+    }
+
+    fun retrieveAccountLimits(userId: Long, accountId: Long): ListOfLimitsResponse {
+        val account = accountRepository.findById(accountId).orElseThrow {
+            EntityNotFoundException("Account with ID $accountId not found")
+        }
+
+        if (account.userId != userId) {
+            throw IllegalAccessException("User ID mismatch")
+        }
+
+        val limitsEntities = limitsRepository.findAllByAccountId(accountId) ?: return ListOfLimitsResponse(emptyList())
+
+        val limits = limitsEntities.map { entity ->
+            entity.let {
+                val category = it.category
+                val amount = it.amount
+                val entityAccountId = it.accountId
+
+                Limits(
+                    category = category,
+                    amount = amount,
+                    accountId = entityAccountId
+                )
+            }
+        }
+
+        return ListOfLimitsResponse(accountLimits = limits)
+    }
+
+
 }
