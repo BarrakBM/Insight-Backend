@@ -16,5 +16,5 @@ data class TransactionResponse(
 
 data class MCC(
     val category: String,
-    val subCategory: String
+    val subCategory: String?
 )

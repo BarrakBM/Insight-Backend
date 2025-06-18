@@ -7,7 +7,7 @@ import org.springframework.stereotype.Repository
 
 @Repository
 interface MccRepository:JpaRepository<MccEntity,Long>{
-    fun findById(id: Long?): MccEntity
+    fun findById(id: Long?): MccEntity?
 
 }
 
@@ -21,5 +21,5 @@ data class MccEntity(
     val category: String,
     val subCategory: String?
     ){
-    constructor(): this(0, "", "", "")
+    constructor(): this(null, "", "", "")
 }
