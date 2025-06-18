@@ -2,9 +2,11 @@ package com.nbk.insights.repository
 
 import jakarta.persistence.*
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.repository.query.Param
 import org.springframework.stereotype.Repository
 import java.math.BigDecimal
 import java.time.LocalDateTime
+import org.springframework.data.jpa.repository.Query
 
 @Repository
 interface TransactionRepository : JpaRepository<TransactionEntity, Long> {
@@ -17,6 +19,39 @@ interface TransactionRepository : JpaRepository<TransactionEntity, Long> {
         sourceAccountId: Long?,
         destinationAccountId: Long?
     ): List<TransactionEntity>
+
+    @Query(
+        """
+            SELECT
+                t.source_account_id      AS accountId,
+                t.mcc_id                 AS mccId,
+                ROUND(CAST(t.amount AS numeric) / :amountBand) * :amountBand as amountGroup,
+                ARRAY_AGG(t.amount ORDER BY t.created_at DESC) AS amounts,  -- all, most recent is first
+                ARRAY_AGG(t.created_at ORDER BY t.created_at DESC)  AS transactionDates,
+                COUNT(*)                 AS txCount,
+                MAX(t.amount)            AS latestAmount, -- <-- get the max by date (assuming dates are unique, else see below)
+                MAX(t.created_at)        AS lastDetected,
+                MIN(t.created_at)        AS firstDetected,
+                COUNT(DISTINCT DATE_TRUNC('month', t.created_at)) AS monthsWith
+            FROM transactions t
+            WHERE t.source_account_id = :accountId
+              AND t.transaction_type = 'DEBIT'
+              AND t.created_at > NOW() - make_interval(months => :monthsBack)
+            GROUP BY t.source_account_id, t.mcc_id, amountGroup
+            HAVING COUNT(DISTINCT DATE_TRUNC('month', t.created_at)) >= :minMonths
+               AND COUNT(*) >= :minTxCount
+            ORDER BY lastDetected DESC
+        """,
+        nativeQuery = true
+    )
+    fun findRecurringPaymentCandidates(
+        @Param("accountId") accountId: Long,
+        @Param("minMonths") minMonths: Int = 2,
+        @Param("minTxCount") minTxCount: Int = 3,
+        @Param("monthsBack") monthsBack: Int = 6,
+        @Param("amountBand") amountBand: Int = 10
+    ): List<Map<String, Any>>
+
 }
 
 @Entity
