@@ -38,12 +38,12 @@ class RecurringPaymentService(
                 .body(mapOf("error" to "account not found"))
         }
 
-//        // Check ownership
-//        if (account.userId != userId) {
-//            return ResponseEntity
-//                .status(HttpStatus.BAD_REQUEST)
-//                .body(mapOf("error" to "account not found"))
-//        }
+        // Check ownership
+        if (account.userId != userId) {
+            return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(mapOf("error" to "account not found"))
+        }
 
 
         val rawResults = transactionRepository.findRecurringPaymentCandidates(
