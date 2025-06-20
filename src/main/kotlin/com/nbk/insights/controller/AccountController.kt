@@ -2,6 +2,7 @@ package com.nbk.insights.controller
 
 import com.nbk.insights.dto.AccountsResponse
 import com.nbk.insights.dto.LimitsRequest
+import com.nbk.insights.dto.ListOfLimitsResponse
 import com.nbk.insights.dto.TotalBalanceResponse
 import com.nbk.insights.repository.UserRepository
 import com.nbk.insights.service.AccountService
@@ -33,65 +34,38 @@ class AccountController(private val accountService: AccountService, private val 
     }
 
     @PostMapping("/limit")
-    fun setAccountLimit(@RequestBody request: LimitsRequest): ResponseEntity<Any> {
+    fun setAccountLimit(@RequestBody request: LimitsRequest): ResponseEntity<Map<String, String>?> {
         val username = SecurityContextHolder.getContext().authentication.name
         val userId = userRepository.findByUsername(username)?.id
             ?: throw UsernameNotFoundException("User not found with username: $username")
+        accountService.setOrUpdateAccountLimit(
+            userId = userId,
+            category = request.category,
+            amount = request.amount,
+            accountId = request.accountId,
+            renewsAt = request.renewsAt
+        )
+        return ResponseEntity.ok(mapOf("message" to "limit set successfully"))
 
-        return try {
-            accountService.setOrUpdateAccountLimit(
-                userId = userId,
-                category = request.category,
-                amount = request.amount,
-                accountId = request.accountId,
-                renewsAt = request.renewsAt
-            )
-            ResponseEntity.ok(mapOf("message" to "Limit set/updated successfully"))
-        } catch (e: IllegalAccessException) {
-            ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.message)
-        } catch (e: EntityNotFoundException) {
-            ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.message)
-        } catch (e: Exception) {
-            ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("An unexpected error occurred")
-        }
     }
 
     @GetMapping("/limits/{accountId}")
-    fun getAccountLimits(@PathVariable accountId: Long): Any {
+    fun getAccountLimits(@PathVariable accountId: Long): ResponseEntity<ListOfLimitsResponse> {
         val username = SecurityContextHolder.getContext().authentication.name
         val userId = userRepository.findByUsername(username)?.id
             ?: throw UsernameNotFoundException("User not found with username: $username")
-
-        return try {
-            val limits = accountService.retrieveAccountLimits(userId = userId, accountId = accountId)
-           return ResponseEntity.ok(limits)
-        } catch (e: IllegalAccessException) {
-            ResponseEntity.status(HttpStatus.FORBIDDEN).body(mapOf("error" to e.message))
-        } catch (e: EntityNotFoundException) {
-            ResponseEntity.status(HttpStatus.NOT_FOUND).body(mapOf("error" to e.message))
-        } catch (e: Exception) {
-            ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(mapOf("error" to "An unexpected error occurred"))
-        }
+        val limits = accountService.retrieveAccountLimits(userId = userId, accountId = accountId)
+            return ResponseEntity.ok(limits)
     }
 
 
     @PostMapping("/limits/deactivate/{limitId}")
-    fun deactivateLimit(@PathVariable limitId: Long): ResponseEntity<Any> {
+    fun deactivateLimit(@PathVariable limitId: Long): ResponseEntity<Map<String, String>?> {
         val username = SecurityContextHolder.getContext().authentication.name
         val userId = userRepository.findByUsername(username)?.id
             ?: throw UsernameNotFoundException("User not found with username: $username")
+        accountService.deactivateLimit(userId = userId, limitId = limitId)
+        return ResponseEntity.ok(mapOf("message" to "Limit deactivated successfully"))
 
-        return try {
-            accountService.deactivateLimit(userId = userId, limitId = limitId)
-            ResponseEntity.ok(mapOf("message" to "Limit deactivated successfully"))
-        } catch (e: IllegalAccessException) {
-            ResponseEntity.status(HttpStatus.FORBIDDEN).body(mapOf("error" to e.message))
-        } catch (e: EntityNotFoundException) {
-            ResponseEntity.status(HttpStatus.NOT_FOUND).body(mapOf("error" to e.message))
-        } catch (e: Exception) {
-            ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(mapOf("error" to "An unexpected error occurred"))
-        }
     }
 }

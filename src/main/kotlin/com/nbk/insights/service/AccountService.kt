@@ -26,7 +26,7 @@ class AccountService(
         val accountEntities = accountRepository.findByUserId(userId)
 
         if (accountEntities.isEmpty()) {
-            throw EntityNotFoundException("No accounts found for user ID: $userId")
+            throw EntityNotFoundException("No accounts found for user ID")
         }
 
         val accounts = accountEntities.map { entity ->
