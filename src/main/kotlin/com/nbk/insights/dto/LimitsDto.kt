@@ -15,5 +15,6 @@ data class ListOfLimitsResponse(
 data class Limits(
     val category: String,
     val amount: BigDecimal,
-    val accountId: Long
+    val accountId: Long,
+    val limitId: Long
 )

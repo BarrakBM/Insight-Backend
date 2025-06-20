@@ -3,8 +3,8 @@ package com.nbk.insights.repository
 import jakarta.persistence.*
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.stereotype.Repository
-import org.springframework.web.client.HttpClientErrorException
 import java.math.BigDecimal
+import java.time.LocalDate
 
 @Repository
 interface LimitsRepository:JpaRepository<LimitsEntity,Long>{

@@ -1,22 +1,19 @@
 package com.nbk.insights.service
 
-import com.nbk.insights.dto.Account
-import com.nbk.insights.dto.AccountsResponse
-import com.nbk.insights.dto.Limits
-import com.nbk.insights.dto.ListOfLimitsResponse
-import com.nbk.insights.dto.TotalBalanceResponse
+import com.nbk.insights.dto.*
 import com.nbk.insights.repository.AccountRepository
 import com.nbk.insights.repository.LimitsEntity
 import com.nbk.insights.repository.LimitsRepository
+import com.nbk.insights.repository.UserRepository
 import jakarta.persistence.EntityNotFoundException
-import org.hibernate.query.spi.Limit
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
 
 @Service
 class AccountService(
-    val accountRepository: AccountRepository,
-    val limitsRepository: LimitsRepository
+    private val accountRepository: AccountRepository,
+    private val limitsRepository: LimitsRepository,
+    private val userRepository: UserRepository
 ) {
 
     fun retrieveUserAccounts(userId: Long): AccountsResponse {
@@ -104,11 +101,13 @@ class AccountService(
                 val category = it.category
                 val amount = it.amount
                 val entityAccountId = it.accountId
+                val limitId = it.id
 
                 Limits(
                     category = category,
                     amount = amount,
-                    accountId = entityAccountId
+                    accountId = entityAccountId,
+                    limitId = limitId ?: 0L
                 )
             }
         }
@@ -116,5 +115,23 @@ class AccountService(
         return ListOfLimitsResponse(accountLimits = limits)
     }
 
+    fun deactivateLimit(userId: Long, limitId: Long) {
+
+        require(userId > 0) { "Invalid user ID: must be greater than 0." }
+        require(limitId > 0) { "Invalid limit ID: must be greater than 0." }
+
+        val user =
+            if (userRepository.existsById(userId))
+                userRepository.findById(userId).get()
+            else
+                throw EntityNotFoundException("User with ID $userId not found")
+
+        if (userId != user.id)
+            throw IllegalAccessException("User ID mismatch")
+
+        val limitEntity = limitsRepository.findById(limitId).get()
+        limitEntity.isActive = false
+        limitsRepository.save(limitEntity)
+    }
 
 }
