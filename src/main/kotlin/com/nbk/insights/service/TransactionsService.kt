@@ -6,9 +6,9 @@
     import com.nbk.insights.repository.MccRepository
     import com.nbk.insights.repository.TransactionRepository
     import org.springframework.http.HttpStatus
-    import org.springframework.http.HttpStatusCode
     import org.springframework.http.ResponseEntity
     import org.springframework.stereotype.Service
+    import java.time.LocalDateTime
 
     @Service
     class TransactionsService(
@@ -59,46 +59,69 @@
             return ResponseEntity.ok(response)
         }
 
-        fun fetchAccountTransactions(accountId: Long?, userId: Long?): ResponseEntity<Any> {
+        fun fetchAccountTransactions(
+            accountId: Long?,
+            userId: Long?,
+            mccId: Long?,
+            period: String,
+            category: String?,
+            year: Int?,
+            month: Int?
+        ): ResponseEntity<Any> {
 
-            // retrieving all accounts related to the user
             val userAccounts = accountRepository.findByUserId(userId)
 
-            // check if accounts belongs to the user
             if (userAccounts.none { it.id == accountId }) {
                 return ResponseEntity
                     .status(HttpStatus.BAD_REQUEST)
                     .body(mapOf("error" to "account not found"))
             }
 
-            // retrieve all transactions relative to the account ID
-            val transactions = transactionRepository
-                .findAllBySourceAccountIdOrDestinationAccountId(accountId, accountId)
+            val now = LocalDateTime.now()
+            val startDate = when {
+                year != null && month != null -> LocalDateTime.of(year, month, 1, 0, 0)
+                year != null && month == null -> LocalDateTime.of(year, 1, 1, 0, 0)
+                period.lowercase() == "monthly" -> now.withDayOfMonth(1).toLocalDate().atStartOfDay()
+                period.lowercase() == "yearly" -> now.withDayOfYear(1).toLocalDate().atStartOfDay()
+                period.lowercase() == "none" -> null
+                else -> return ResponseEntity.badRequest().body(mapOf("error" to "Invalid period"))
+            }
 
-            // retrieve all MCCs relative to the transactions we retrieved
+            val endDate = when {
+                year != null && month != null -> startDate?.plusMonths(1)?.minusSeconds(1)
+                year != null && month == null -> startDate?.plusYears(1)?.minusSeconds(1)
+                else -> null
+            }
+
+            val transactions = transactionRepository.findFilteredTransactionsInRange(
+                accountId = accountId,
+                category = category,
+                mccId = mccId,
+                startDate = startDate,
+                endDate = endDate
+            )
+
             val mccIds = transactions.mapNotNull { it.mccId }.toSet()
-            val mccMap = mccRepository.findAllById(mccIds)
-                .associateBy { it.id }
+            val mccMap = mccRepository.findAllById(mccIds).associateBy { it.id }
 
-            // map the MCCs and transactions to our response DTOs
             val response = transactions.map { tx ->
                 val mccEntity = tx.mccId?.let { mccMap[it] }
-                val mccDto = MCC(
-                    category    = mccEntity?.category ?: "unknown",
-                    subCategory = mccEntity?.subCategory ?: "unknown"
-                )
-
                 TransactionResponse(
-                    id                   = tx.id,
-                    sourceAccountId      = tx.sourceAccountId,
+                    id = tx.id,
+                    sourceAccountId = tx.sourceAccountId,
                     destinationAccountId = tx.destinationAccountId,
-                    amount               = tx.amount,
-                    transactionType      = tx.transactionType,
-                    mcc                  = mccDto,
-                    createdAt            = tx.createdAt
+                    amount = tx.amount,
+                    transactionType = tx.transactionType,
+                    mcc = MCC(
+                        category = mccEntity?.category ?: "unknown",
+                        subCategory = mccEntity?.subCategory ?: "unknown"
+                    ),
+                    createdAt = tx.createdAt
                 )
             }
 
             return ResponseEntity.ok(response)
         }
+
+
     }
