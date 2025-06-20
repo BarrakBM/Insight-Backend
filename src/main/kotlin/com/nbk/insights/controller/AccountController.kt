@@ -33,7 +33,7 @@ class AccountController(private val accountService: AccountService, private val 
     }
 
     @PostMapping("/limit")
-    fun setAccountLimit(@RequestBody request: LimitsRequest): ResponseEntity<String> {
+    fun setAccountLimit(@RequestBody request: LimitsRequest): ResponseEntity<Any> {
         val username = SecurityContextHolder.getContext().authentication.name
         val userId = userRepository.findByUsername(username)?.id
             ?: throw UsernameNotFoundException("User not found with username: $username")
@@ -43,9 +43,10 @@ class AccountController(private val accountService: AccountService, private val 
                 userId = userId,
                 category = request.category,
                 amount = request.amount,
-                accountId = request.accountId
+                accountId = request.accountId,
+                renewsAt = request.renewsAt
             )
-            ResponseEntity.ok("Limit set/updated successfully")
+            ResponseEntity.ok(mapOf("message" to "Limit set/updated successfully"))
         } catch (e: IllegalAccessException) {
             ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.message)
         } catch (e: EntityNotFoundException) {

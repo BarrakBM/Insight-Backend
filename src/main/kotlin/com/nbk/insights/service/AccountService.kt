@@ -6,8 +6,10 @@ import com.nbk.insights.repository.LimitsEntity
 import com.nbk.insights.repository.LimitsRepository
 import com.nbk.insights.repository.UserRepository
 import jakarta.persistence.EntityNotFoundException
+import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
+import java.time.LocalDate
 
 @Service
 class AccountService(
@@ -61,7 +63,18 @@ class AccountService(
         return TotalBalanceResponse(total)
     }
 
-    fun setOrUpdateAccountLimit(userId: Long, category: String, amount: BigDecimal, accountId: Long) {
+    private fun calculateNextRenewalDate(): LocalDate {
+        val now = LocalDate.now()
+        return now.withDayOfMonth(1).plusMonths(1) // First day of next month
+    }
+
+    fun setOrUpdateAccountLimit(
+        userId: Long,
+        category: String,
+        amount: BigDecimal,
+        accountId: Long,
+        renewsAt: LocalDate?
+    ) {
         val account = accountRepository.findById(accountId).orElseThrow {
             EntityNotFoundException("Account with ID $accountId not found")
         }
@@ -70,14 +83,17 @@ class AccountService(
             throw IllegalAccessException("User ID mismatch")
         }
 
-        val existingLimit = limitsRepository.findByAccountId(accountId)
+        val existingLimit = limitsRepository.findByAccountIdAndCategory(accountId, category)
 
-        val newLimit = existingLimit?.copy(category = category, amount = amount)
-            ?: LimitsEntity(
-                category = category,
-                amount = amount,
-                accountId = accountId
-            )
+        val newLimit = existingLimit?.copy(
+            amount = amount,
+            renewsAt = renewsAt ?: calculateNextRenewalDate()
+        ) ?: LimitsEntity(
+            category = category,
+            amount = amount,
+            accountId = accountId,
+            renewsAt = renewsAt ?: calculateNextRenewalDate()
+        )
 
         limitsRepository.save(newLimit)
     }
@@ -91,28 +107,34 @@ class AccountService(
             throw IllegalAccessException("User ID mismatch")
         }
 
-        val limitsEntities =
-            limitsRepository.findAllByAccountId(accountId)?.filter { it.isActive } ?: return ListOfLimitsResponse(
-                emptyList()
-            )
+        val limitsEntities = limitsRepository.findAllByAccountId(accountId)
+            ?.filter { it.isActive }
+            ?: return ListOfLimitsResponse(emptyList())
 
         val limits = limitsEntities.map { entity ->
-            entity.let {
-                val category = it.category
-                val amount = it.amount
-                val entityAccountId = it.accountId
-                val limitId = it.id
-
-                Limits(
-                    category = category,
-                    amount = amount,
-                    accountId = entityAccountId,
-                    limitId = limitId ?: 0L
-                )
-            }
+            Limits(
+                category = entity.category,
+                amount = entity.amount,
+                accountId = entity.accountId,
+                limitId = entity.id ?: 0L,
+                renewsAt = entity.renewsAt
+            )
         }
 
         return ListOfLimitsResponse(accountLimits = limits)
+    }
+    @Scheduled(cron = "0 0 1 * * ?") // Run at midnight on the 1st of every month
+    fun resetExpiredLimits() {
+        val today = LocalDate.now()
+        val expiredLimits = limitsRepository.findAllByRenewsAtBefore(today)
+
+        expiredLimits.forEach { limit ->
+            // Reset the limit for the new period
+            limit.renewsAt = limit.renewsAt.plusMonths(1)
+            // Optionally reset any spent amount tracking if you have that
+        }
+
+        limitsRepository.saveAll(expiredLimits)
     }
 
     fun deactivateLimit(userId: Long, limitId: Long) {

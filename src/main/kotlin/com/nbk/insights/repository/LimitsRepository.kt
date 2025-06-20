@@ -10,6 +10,8 @@ import java.time.LocalDate
 interface LimitsRepository:JpaRepository<LimitsEntity,Long>{
     fun findByAccountId(accountId: Long): LimitsEntity?
     fun findAllByAccountId(accountId: Long): List<LimitsEntity>?
+    fun findByAccountIdAndCategory(accountId: Long, category: String): LimitsEntity?
+    fun findAllByRenewsAtBefore(date: LocalDate): List<LimitsEntity>
 
 }
 
@@ -24,6 +26,7 @@ data class LimitsEntity(
     val accountId: Long,
     var isActive: Boolean = true,
     val createdAt: LocalDate = LocalDate.now(),
+    var renewsAt: LocalDate = LocalDate.now().plusMonths(1)
 ){
     constructor(): this(0, "", BigDecimal.ZERO, 0)
     @PrePersist
