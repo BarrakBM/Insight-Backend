@@ -21,7 +21,9 @@ data class LimitsEntity(
     val id: Long? = null,
     val category: String,
     val amount: BigDecimal,
-    val accountId: Long
+    val accountId: Long,
+    var isActive: Boolean = true,
+    val createdAt: LocalDate = LocalDate.now(),
 ){
     constructor(): this(0, "", BigDecimal.ZERO, 0)
     @PrePersist
