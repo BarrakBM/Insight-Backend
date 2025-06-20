@@ -94,7 +94,10 @@ class AccountService(
             throw IllegalAccessException("User ID mismatch")
         }
 
-        val limitsEntities = limitsRepository.findAllByAccountId(accountId) ?: return ListOfLimitsResponse(emptyList())
+        val limitsEntities =
+            limitsRepository.findAllByAccountId(accountId)?.filter { it.isActive } ?: return ListOfLimitsResponse(
+                emptyList()
+            )
 
         val limits = limitsEntities.map { entity ->
             entity.let {
