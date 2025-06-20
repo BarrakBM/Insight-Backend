@@ -11,7 +11,7 @@
     data class ErrorResponse(
         val timestamp: LocalDateTime = LocalDateTime.now(),
         val status: Int,
-//        val error: String,
+        val error: String,
         val message: String?,
     )
 
@@ -56,7 +56,7 @@
         private fun buildErrorResponse(status: HttpStatus, message: String?): ResponseEntity<ErrorResponse> {
             val response = ErrorResponse(
                 status = status.value(),
-//                error = status.reasonPhrase,
+                error = status.reasonPhrase,
                 message = message
             )
             return ResponseEntity(response, status)
