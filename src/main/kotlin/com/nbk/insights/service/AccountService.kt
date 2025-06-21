@@ -53,7 +53,7 @@ class AccountService(
         val accountEntities = accountRepository.findByUserId(userId)
 
         if (accountEntities.isEmpty()) {
-            throw NoSuchElementException("No accounts found for user ID: $userId")
+            throw NoSuchElementException("No accounts found for user ID")
         }
 
         val total = accountEntities
