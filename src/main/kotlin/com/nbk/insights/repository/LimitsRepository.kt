@@ -31,7 +31,7 @@ data class LimitsEntity(
     constructor(): this(0, "", BigDecimal.ZERO, 0)
     @PrePersist
     @PreUpdate
-    fun validateBalance() {
+    fun validateAmount() {
         if (amount < BigDecimal.ZERO) {
             throw IllegalArgumentException("Amount cannot be negative")
         }
