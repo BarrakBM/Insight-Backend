@@ -3,6 +3,7 @@ package com.nbk.insights.service
 import com.nbk.insights.dto.AdherenceLevel
 import com.nbk.insights.dto.BudgetAdherenceResponse
 import com.nbk.insights.dto.CategoryAdherence
+import com.nbk.insights.dto.SpendingTrend
 import com.nbk.insights.repository.AccountRepository
 import com.nbk.insights.repository.LimitsEntity
 import com.nbk.insights.repository.LimitsRepository
@@ -24,8 +25,15 @@ class LimitsService(
     private val transactionRepository: TransactionRepository,
     private val mccRepository: MccRepository
 ) {
+
     fun checkBudgetAdherence(userId: Long): BudgetAdherenceResponse {
         val userAccounts = accountRepository.findByUserId(userId)
+
+        if (userAccounts.get(
+                index = 0
+            ).userId != userId) {
+            throw IllegalStateException("User not found")
+        }
 
         if (userAccounts.isEmpty()) {
             return BudgetAdherenceResponse(
@@ -46,7 +54,8 @@ class LimitsService(
 
             accountLimits.forEach { limit ->
                 val spentAmount = calculateSpentAmount(account.id!!, limit.category, limit.renewsAt)
-                val adherence = createCategoryAdherence(limit, spentAmount)
+                val lastMonthSpentAmount = calculateLastMonthSpentAmount(account.id!!, limit.category, limit.renewsAt)
+                val adherence = createCategoryAdherence(limit, spentAmount, lastMonthSpentAmount)
                 categoryAdherences.add(adherence)
             }
         }
@@ -145,7 +154,35 @@ class LimitsService(
         }
     }
 
-    private fun createCategoryAdherence(limit: LimitsEntity, spentAmount: BigDecimal): CategoryAdherence {
+    private fun calculateLastMonthSpentAmount(accountId: Long, category: String, renewsAt: LocalDate): BigDecimal {
+        val (currentPeriodStart, currentPeriodEnd) = calculatePeriodRange(renewsAt)
+
+        // Calculate the same period in the previous month
+        val lastMonthPeriodStart = currentPeriodStart.minusMonths(1)
+        val lastMonthPeriodEnd = currentPeriodEnd.minusMonths(1)
+
+        val transactions = transactionRepository.findFilteredTransactionsInRange(
+            accountId = accountId,
+            category = category,
+            mccId = null,
+            startDate = lastMonthPeriodStart,
+            endDate = lastMonthPeriodEnd
+        )
+
+        // Get MCC data to filter by category
+        val mccIds = transactions.mapNotNull { it.mccId }.toSet()
+        val mccMap = mccRepository.findAllById(mccIds).associateBy { it.id }
+
+        return transactions
+            .filter { tx ->
+                val mcc = tx.mccId?.let { mccMap[it] }
+                mcc?.category == category
+            }
+            .filter { it.transactionType == TransactionType.DEBIT } // Only count outgoing transactions
+            .sumOf { it.amount.abs() }
+    }
+
+    private fun createCategoryAdherence(limit: LimitsEntity, spentAmount: BigDecimal, lastMonthSpentAmount: BigDecimal): CategoryAdherence {
         val (periodStart, periodEnd) = calculatePeriodRange(limit.renewsAt)
         val daysInPeriod = getDaysInMonth(limit.renewsAt)
         val today = LocalDate.now()
@@ -171,6 +208,24 @@ class LimitsService(
                     (todayDate.isBefore(periodEnd.toLocalDate()) || todayDate.isEqual(periodEnd.toLocalDate()))
         }
 
+        // Calculate spending trend and change
+        val spendingChange = spentAmount - lastMonthSpentAmount
+        val spendingChangePercentage = if (lastMonthSpentAmount > BigDecimal.ZERO) {
+            (spendingChange.divide(lastMonthSpentAmount, 4, RoundingMode.HALF_UP) * BigDecimal(100)).toDouble()
+        } else if (spentAmount > BigDecimal.ZERO) {
+            100.0 // If there was no spending last month but there is now, it's 100% increase
+        } else {
+            0.0 // Both are zero
+        }
+
+        val spendingTrend = when {
+            lastMonthSpentAmount == BigDecimal.ZERO && spentAmount == BigDecimal.ZERO -> SpendingTrend.NO_DATA
+            lastMonthSpentAmount == BigDecimal.ZERO -> SpendingTrend.INCREASED
+            spendingChangePercentage > 5.0 -> SpendingTrend.INCREASED
+            spendingChangePercentage < -5.0 -> SpendingTrend.DECREASED
+            else -> SpendingTrend.STABLE
+        }
+
         return CategoryAdherence(
             category = limit.category,
             budgetAmount = limit.amount,
@@ -183,7 +238,11 @@ class LimitsService(
             periodStart = periodStart.toLocalDate(),
             periodEnd = periodEnd.toLocalDate(),
             daysInPeriod = daysInPeriod,
-            isActivePeriod = isActivePeriod
+            isActivePeriod = isActivePeriod,
+            lastMonthSpentAmount = lastMonthSpentAmount,
+            spendingTrend = spendingTrend,
+            spendingChange = spendingChange,
+            spendingChangePercentage = spendingChangePercentage
         )
     }
 
@@ -226,7 +285,8 @@ class LimitsService(
 
         val categoryAdherences = accountLimits.map { limit ->
             val spentAmount = calculateSpentAmount(accountId, limit.category, limit.renewsAt)
-            createCategoryAdherence(limit, spentAmount)
+            val lastMonthSpentAmount = calculateLastMonthSpentAmount(accountId, limit.category, limit.renewsAt)
+            createCategoryAdherence(limit, spentAmount, lastMonthSpentAmount)
         }
 
         val totalBudget = categoryAdherences.sumOf { it.budgetAmount }
@@ -241,6 +301,4 @@ class LimitsService(
             accountsChecked = 1
         )
     }
-
-
 }

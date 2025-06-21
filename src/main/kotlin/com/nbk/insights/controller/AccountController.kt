@@ -68,9 +68,34 @@ class AccountController(
         return ResponseEntity.ok(mapOf("message" to "Limit deactivated successfully"))
     }
 
-    @GetMapping("/adherence/{userId}")
-    fun getBudgetAdherence(@PathVariable userId: Long): ResponseEntity<BudgetAdherenceResponse> {
+    @GetMapping("/adherence")
+    fun getBudgetAdherence(): ResponseEntity<BudgetAdherenceResponse> {
+        val username = SecurityContextHolder.getContext().authentication.name
+        val userId = userRepository.findByUsername(username)?.id
+            ?: throw UsernameNotFoundException("User not found with username: $username")
         val adherence = limitAdherenceService.checkBudgetAdherence(userId)
         return ResponseEntity.ok(adherence)
+    }
+
+    @GetMapping("/adherence/trends")
+    fun getSpendingTrends(): ResponseEntity<out List<Map<String, Any>>?> {
+        val username = SecurityContextHolder.getContext().authentication.name
+        val userId = userRepository.findByUsername(username)?.id
+            ?: throw UsernameNotFoundException("User not found with username: $username")
+        val adherence = limitAdherenceService.checkBudgetAdherence(userId)
+
+        val trends = adherence.categoryAdherences.map { category ->
+            mapOf(
+                "category" to category.category,
+                "currentSpent" to category.spentAmount,
+                "lastMonthSpent" to category.lastMonthSpentAmount,
+                "spendingChange" to category.spendingChange,
+                "spendingChangePercentage" to category.spendingChangePercentage,
+                "trend" to category.spendingTrend.displayName,
+                "budgetAmount" to category.budgetAmount,
+                "adherenceLevel" to category.adherenceLevel.displayName
+            )
+        }
+        return ResponseEntity.ok(trends)
     }
 }

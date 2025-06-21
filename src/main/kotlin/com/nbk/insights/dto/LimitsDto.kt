@@ -42,8 +42,18 @@ data class CategoryAdherence(
     val periodStart: LocalDate,
     val periodEnd: LocalDate,
     val daysInPeriod: Long,
-    val isActivePeriod: Boolean
+    val isActivePeriod: Boolean,
+    val lastMonthSpentAmount: BigDecimal,
+    val spendingTrend: SpendingTrend,
+    val spendingChange: BigDecimal,
+    val spendingChangePercentage: Double
 )
+enum class SpendingTrend(val displayName: String) {
+    INCREASED("Increased"),      // Spending went up
+    DECREASED("Decreased"),      // Spending went down
+    STABLE("Stable"),           // Similar spending (±5%)
+    NO_DATA("No Data")          // No previous period data
+}
 
 data class BudgetAdherenceResponse(
     val overallAdherence: AdherenceLevel,
