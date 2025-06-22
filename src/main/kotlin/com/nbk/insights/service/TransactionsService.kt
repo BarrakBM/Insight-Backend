@@ -8,8 +8,14 @@ import com.nbk.insights.repository.TransactionRepository
 import jakarta.persistence.EntityNotFoundException
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import com.hazelcast.logging.Logger
+import com.nbk.insights.helper.buildCacheKey
+import com.nbk.insights.serverInsightsCache
 import org.springframework.stereotype.Service
 import java.time.LocalDateTime
+
+private val loggerUserTransaction = Logger.getLogger("transactions-user")
+private val loggerAccountTransaction = Logger.getLogger("transactions-account")
 
 @Service
 class TransactionsService(
@@ -19,6 +25,14 @@ class TransactionsService(
 ) {
 
     fun fetchUserTransactions(userId: Long?): List<TransactionResponse> {
+
+        val transactionCache = serverInsightsCache.getMap<Long, List<TransactionResponse>>("transactions-user")
+
+        transactionCache[userId]?.let {
+            loggerUserTransaction.info("Returning list of transactions for userId=$userId from cache.")
+            return it
+        }
+
         val accounts = accountRepository.findByUserId(userId)
         if (accounts.isEmpty()) {
             throw EntityNotFoundException("No accounts found for userId: $userId")
@@ -32,7 +46,7 @@ class TransactionsService(
         val mccIds = transactions.mapNotNull { it.mccId }.toSet()
         val mccMap = mccRepository.findAllById(mccIds).associateBy { it.id }
 
-        return transactions.map { tx ->
+        val response = transactions.map { tx ->
             val mccEntity = tx.mccId?.let { mccMap[it] }
             val mccDto = MCC(
                 category = mccEntity?.category ?: "Transfer",
@@ -49,6 +63,10 @@ class TransactionsService(
                 createdAt = tx.createdAt
             )
         }
+
+        loggerUserTransaction.info("No transaction(s) found, caching new data...")
+        transactionCache[userId] = response
+        return response
     }
 
     fun fetchAccountTransactions(
@@ -60,6 +78,16 @@ class TransactionsService(
         year: Int?,
         month: Int?
     ): List<TransactionResponse> {
+
+        val transactionCache = serverInsightsCache.getMap<String, List<TransactionResponse>>("transactions-account")
+
+        val cacheKey = buildCacheKey(accountId, category, mccId, period, year, month)
+
+        transactionCache[cacheKey]?.let {
+            loggerAccountTransaction.info("Returning cached transactions for key=$cacheKey")
+            return it
+        }
+
         val userAccounts = accountRepository.findByUserId(userId)
         if (userAccounts.none { it.id == accountId }) {
             throw IllegalArgumentException("Account $accountId not found or does not belong to the user")
@@ -92,7 +120,7 @@ class TransactionsService(
         val mccIds = transactions.mapNotNull { it.mccId }.toSet()
         val mccMap = mccRepository.findAllById(mccIds).associateBy { it.id }
 
-        return transactions.map { tx ->
+        val response =  transactions.map { tx ->
             val mccEntity = tx.mccId?.let { mccMap[it] }
             TransactionResponse(
                 id = tx.id,
@@ -107,5 +135,9 @@ class TransactionsService(
                 createdAt = tx.createdAt
             )
         }
+
+        loggerAccountTransaction.info("No transaction(s) found, caching new data...")
+        transactionCache[cacheKey] = response
+        return response
     }
 }
