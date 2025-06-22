@@ -1,21 +1,23 @@
 package com.nbk.insights.service
 
+
 import com.nbk.insights.dto.MCC
-import com.nbk.insights.dto.RecurringPaymentResponse
-import com.nbk.insights.helper.RecurringPaymentCandidate
-import com.nbk.insights.helper.RecurringPaymentHelpers
-import com.nbk.insights.repository.AccountRepository
-import com.nbk.insights.repository.MccRepository
 import com.nbk.insights.repository.TransactionRepository
-import jakarta.persistence.EntityNotFoundException
+import com.nbk.insights.helper.RecurringPaymentHelpers
+import com.nbk.insights.helper.RecurringPaymentCandidate
+import com.nbk.insights.dto.RecurringPaymentResponse
+import com.nbk.insights.repository.MccRepository
+import org.springframework.http.HttpStatus
+import org.springframework.http.ResponseEntity
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
 
 @Service
 class RecurringPaymentService(
     private val transactionRepository: TransactionRepository,
-    private val accountRepository: AccountRepository,
+    private val accountRepository: com.nbk.insights.repository.AccountRepository,
     private val mccRepository: MccRepository
+
 ) {
     fun detectRecurringPaymentsDynamic(
         accountId: Long,
@@ -25,15 +27,24 @@ class RecurringPaymentService(
         minMonths: Int = 2,
         minTxCount: Int = 3,
         minConfidence: Double = 0.6
-    ): List<RecurringPaymentResponse> {
+    ): ResponseEntity<Any> {
 
-        val account = accountRepository.findById(accountId).orElseThrow {
-            EntityNotFoundException("Account not found with id: $accountId")
+
+        // Validate account exists
+        val account = accountRepository.findById(accountId).orElse(null)
+        if (account == null) {
+            return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(mapOf("error" to "account not found"))
         }
 
+        // Check ownership
         if (account.userId != userId) {
-            throw IllegalAccessException("You do not have access to this account")
+            return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(mapOf("error" to "account not found"))
         }
+
 
         val rawResults = transactionRepository.findRecurringPaymentCandidates(
             accountId = accountId,
@@ -44,21 +55,18 @@ class RecurringPaymentService(
         )
 
         if (rawResults.isEmpty()) {
-            throw NoSuchElementException("No recurring payments found for account id: $accountId")
+            return ResponseEntity.notFound().build()
         }
 
         val candidates = rawResults.map { row ->
             val amounts = (row["amounts"] as Array<*>).map { it as BigDecimal }
-            val transactionDates = (row["transactiondates"] as Array<*>).map {
-                (it as java.sql.Timestamp).toLocalDateTime()
-            }
-
+            val transactionDates = (row["transactiondates"] as Array<*>).map { (it as java.sql.Timestamp).toLocalDateTime() }
             RecurringPaymentCandidate(
                 accountId = (row["accountid"] as Number).toLong(),
                 mccId = (row["mccid"] as Number).toLong(),
                 amountGroup = BigDecimal(row["amountgroup"].toString()),
                 amounts = amounts,
-                latestAmount = amounts.first(),
+                latestAmount = amounts.first(), // array is ordered DESC by date, so first is latest
                 transactionDates = transactionDates,
                 txCount = (row["txcount"] as Number).toInt(),
                 lastDetected = (row["lastdetected"] as java.sql.Timestamp).toLocalDateTime(),
@@ -67,30 +75,40 @@ class RecurringPaymentService(
             )
         }
 
-        return candidates.map { candidate ->
-            val mccEntity = mccRepository.findById(candidate.mccId).orElseThrow {
-                EntityNotFoundException("MCC not found with ID: ${candidate.mccId}")
-            }
 
+
+
+        val withConfidence = candidates.mapNotNull { candidate ->
+            // Fetch the full MCC object using the candidate's mccId
+            val mccEntity = mccRepository.findById(candidate.mccId).orElse(null) ?: return@mapNotNull null
+
+            // Map MCC entity to your DTO
+            val mcc = MCC(
+                category = mccEntity.category,
+                subCategory = mccEntity.subCategory
+            )
             val confidence = RecurringPaymentHelpers.confidenceScore(candidate)
                 .let { String.format("%.1f", it).toDouble() }
+            val intervalRegular = RecurringPaymentHelpers.checkIntervalRegularity(candidate)
+            val skipped = RecurringPaymentHelpers.detectSkippedPayments(candidate)
 
             RecurringPaymentResponse(
                 accountId = candidate.accountId,
-                mcc = MCC(
-                    category = mccEntity.category,
-                    subCategory = mccEntity.subCategory
-                ),
+                mcc = mcc,
                 amountGroup = candidate.amountGroup,
                 amounts = candidate.amounts,
                 latestAmount = candidate.latestAmount,
                 transactionCount = candidate.txCount,
                 monthsWithPayments = candidate.monthsWith,
-                detectedIntervalRegular = RecurringPaymentHelpers.checkIntervalRegularity(candidate),
+                detectedIntervalRegular = intervalRegular,
                 confidenceScore = confidence,
                 lastDetected = candidate.lastDetected,
-                skippedPaymentEstimate = RecurringPaymentHelpers.detectSkippedPayments(candidate)
+                skippedPaymentEstimate = skipped
             )
+
         }.filter { it.confidenceScore >= minConfidence }
+
+
+        return ResponseEntity.ok(withConfidence)
     }
 }
