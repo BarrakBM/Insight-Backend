@@ -18,3 +18,11 @@ data class MCC(
     val category: String,
     val subCategory: String?
 )
+
+enum class Category{
+    DINING,
+    ENTERTAINMENT,
+    SHOPPING,
+    FOOD_AND_GROCERIES,
+    OTHER
+}

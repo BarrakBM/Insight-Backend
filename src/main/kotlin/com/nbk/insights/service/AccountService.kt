@@ -123,19 +123,6 @@ class AccountService(
 
         return ListOfLimitsResponse(accountLimits = limits)
     }
-    @Scheduled(cron = "0 0 1 * * ?") // Run at midnight on the 1st of every month
-    fun resetExpiredLimits() {
-        val today = LocalDate.now()
-        val expiredLimits = limitsRepository.findAllByRenewsAtBefore(today)
-
-        expiredLimits.forEach { limit ->
-            // Reset the limit for the new period
-            limit.renewsAt = limit.renewsAt.plusMonths(1)
-            // Optionally reset any spent amount tracking if you have that
-        }
-
-        limitsRepository.saveAll(expiredLimits)
-    }
 
     fun deactivateLimit(userId: Long, limitId: Long) {
 
