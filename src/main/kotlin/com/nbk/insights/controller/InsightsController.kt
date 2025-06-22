@@ -18,15 +18,5 @@ class InsightsController(
     private val userRepository: UserRepository
 
 ) {
-    @GetMapping("/account/recurring-payments/{accountId}")
-    fun detectRecurringPaymentsForAccount(
-        @PathVariable accountId: Long
-    ): ResponseEntity<Any> {
-        val username = SecurityContextHolder.getContext().authentication.name
-        val user = userRepository.findByUsername(username)
-            ?: return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(mapOf("error" to "user not found"))
 
-        return recurringPaymentService.detectRecurringPaymentsDynamic(accountId, user.id)
-
-    }
 }
