@@ -1,6 +1,5 @@
 package com.nbk.insights.dto
 
-import com.nbk.insights.dto.MCC
 import java.math.BigDecimal
 import java.time.LocalDateTime
 
