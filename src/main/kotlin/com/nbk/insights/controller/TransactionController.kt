@@ -1,14 +1,13 @@
 package com.nbk.insights.controller
 
+import com.nbk.insights.dto.RecurringPaymentResponse
 import com.nbk.insights.dto.TransactionResponse
 import com.nbk.insights.repository.UserRepository
 import com.nbk.insights.service.RecurringPaymentService
 import com.nbk.insights.service.TransactionsService
-import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.core.userdetails.UsernameNotFoundException
-import org.springframework.stereotype.*
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestMapping
@@ -24,11 +23,12 @@ class TransactionController(
 ) {
 
     @GetMapping("/user/transactions")
-    fun fetchUserTransactions(): ResponseEntity<Any> {
+    fun fetchUserTransactions(): ResponseEntity<List<TransactionResponse>> {
         val username = SecurityContextHolder.getContext().authentication.name
         val user = userRepository.findByUsername(username)
             ?: throw UsernameNotFoundException("User not found with email: $username")
-        return transactionsService.fetchUserTransactions(user.id)
+        val result = transactionsService.fetchUserTransactions(user.id)
+        return ResponseEntity.ok(result)
     }
 
     @GetMapping("/account/transactions/{accountId}")
@@ -39,24 +39,23 @@ class TransactionController(
         @RequestParam(required = false, defaultValue = "none") period: String,
         @RequestParam(required = false) year: Int?,
         @RequestParam(required = false) month: Int?
-    ): ResponseEntity<Any> {
+    ): ResponseEntity<List<TransactionResponse>> {
         val username = SecurityContextHolder.getContext().authentication.name
         val user = userRepository.findByUsername(username)
             ?: throw UsernameNotFoundException("User not found with email: $username")
-
-        return transactionsService.fetchAccountTransactions(accountId, user.id, mccId, period, category, year, month)
+        val result = transactionsService.fetchAccountTransactions(accountId, user.id, mccId, period, category, year, month)
+        return ResponseEntity.ok(result)
     }
 
     @GetMapping("/account/recurring-payments/{accountId}")
     fun detectRecurringPaymentsForAccount(
         @PathVariable accountId: Long
-    ): ResponseEntity<Any> {
+    ): ResponseEntity<List<RecurringPaymentResponse>> {
         val username = SecurityContextHolder.getContext().authentication.name
         val user = userRepository.findByUsername(username)
-            ?: return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(mapOf("error" to "user not found"))
+            ?: throw UsernameNotFoundException("User not found with email: $username")
 
-        return recurringPaymentService.detectRecurringPaymentsDynamic(accountId, user.id)
-
+        val payments = recurringPaymentService.detectRecurringPaymentsDynamic(accountId, user.id)
+        return ResponseEntity.ok(payments)
     }
-
 }
