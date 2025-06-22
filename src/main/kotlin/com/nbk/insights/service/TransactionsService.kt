@@ -41,8 +41,8 @@
             val response = transactions.map { tx ->
                 val mccEntity = tx.mccId?.let { mccMap[it] }
                 val mccDto = MCC(
-                    category    = mccEntity?.category ?: "unknown",
-                    subCategory = mccEntity?.subCategory ?: "unknown"
+                    category    = mccEntity?.category ?: "Transfer",
+                    subCategory = mccEntity?.subCategory ?: "Account"
                 )
 
                 TransactionResponse(
