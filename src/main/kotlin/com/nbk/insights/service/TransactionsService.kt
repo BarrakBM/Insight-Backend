@@ -6,8 +6,6 @@ import com.nbk.insights.repository.AccountRepository
 import com.nbk.insights.repository.MccRepository
 import com.nbk.insights.repository.TransactionRepository
 import jakarta.persistence.EntityNotFoundException
-import org.springframework.http.HttpStatus
-import org.springframework.http.ResponseEntity
 import com.hazelcast.logging.Logger
 import com.nbk.insights.helper.buildCacheKey
 import com.nbk.insights.serverInsightsCache
