@@ -78,22 +78,22 @@ class AccountController(
     }
 
     @GetMapping("/adherence/trends")
-    fun getSpendingTrends(): ResponseEntity<out List<Map<String, Any>>?> {
+    fun getSpendingTrends(): ResponseEntity<List<SpendingTrendResponse>> {
         val username = SecurityContextHolder.getContext().authentication.name
         val userId = userRepository.findByUsername(username)?.id
             ?: throw UsernameNotFoundException("User not found with username: $username")
         val adherence = limitAdherenceService.checkBudgetAdherence(userId)
 
         val trends = adherence.categoryAdherences.map { category ->
-            mapOf(
-                "category" to category.category,
-                "currentSpent" to category.spentAmount,
-                "lastMonthSpent" to category.lastMonthSpentAmount,
-                "spendingChange" to category.spendingChange,
-                "spendingChangePercentage" to category.spendingChangePercentage,
-                "trend" to category.spendingTrend.displayName,
-                "budgetAmount" to category.budgetAmount,
-                "adherenceLevel" to category.adherenceLevel.displayName
+            SpendingTrendResponse(
+                category = category.category,
+                currentSpent = category.spentAmount,
+                lastMonthSpent = category.lastMonthSpentAmount,
+                spendingChange = category.spendingChange,
+                spendingChangePercentage = category.spendingChangePercentage,
+                trend = category.spendingTrend.displayName,
+                budgetAmount = category.budgetAmount,
+                adherenceLevel = category.adherenceLevel.displayName
             )
         }
         return ResponseEntity.ok(trends)

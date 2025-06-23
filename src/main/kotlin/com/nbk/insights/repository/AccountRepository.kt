@@ -9,7 +9,7 @@ import java.security.Principal
 
 @Repository
 interface AccountRepository:JpaRepository<AccountEntity,Long>{
-    fun findByUserId(userId: Long?): List<AccountEntity>
+    fun findByUserId(userId: Long): List<AccountEntity>
 }
 
 @Entity
