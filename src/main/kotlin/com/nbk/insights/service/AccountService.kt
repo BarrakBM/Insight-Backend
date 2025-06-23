@@ -129,14 +129,15 @@ class AccountService(
         require(userId > 0) { "Invalid user ID: must be greater than 0." }
         require(limitId > 0) { "Invalid limit ID: must be greater than 0." }
 
-        val user =
-            if (userRepository.existsById(userId))
-                userRepository.findById(userId).get()
-            else
-                throw EntityNotFoundException("User with ID $userId not found")
-        TODO("need to traverse user to account to limits")
-        if (userId != user.id)
-            throw IllegalAccessException("User ID mismatch")
+        val accounts = accountRepository.findByUserId(userId)
+
+        for (account in accounts) {
+            val limit = limitsRepository.findByAccountId(account.id!!)
+
+            if (limit != null && limit.id != limitId) {
+                throw IllegalAccessException("Limit ID mismatch")
+            }
+        }
 
         val limitEntity = limitsRepository.findById(limitId).get()
         limitEntity.isActive = false
