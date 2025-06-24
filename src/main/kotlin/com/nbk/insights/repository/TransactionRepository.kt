@@ -51,6 +51,24 @@ interface TransactionRepository : JpaRepository<TransactionEntity, Long> {
         @Param("endDate") endDate: LocalDateTime?
     ): List<TransactionEntity>
 
+    @Query("""
+    SELECT t.* FROM transactions t
+    LEFT JOIN mcc m ON t.mcc_id = m.id
+    WHERE (t.source_account_id IN :accountIds OR t.destination_account_id IN :accountIds)
+      AND (COALESCE(:category, '') = '' OR m.category = :category)
+      AND (CAST(:startDate AS TIMESTAMP) IS NULL OR t.created_at >= :startDate)
+      AND (CAST(:endDate AS TIMESTAMP) IS NULL OR t.created_at <= :endDate)
+      AND (COALESCE(:mccId, -1) = -1 OR t.mcc_id = :mccId)
+    ORDER BY t.created_at DESC
+""", nativeQuery = true)
+    fun findFilteredUserTransactionsInRange(
+        @Param("accountIds") accountIds: List<Long>,
+        @Param("category") category: String?,
+        @Param("mccId") mccId: Long?,
+        @Param("startDate") startDate: LocalDateTime?,
+        @Param("endDate") endDate: LocalDateTime?
+    ): List<TransactionEntity>
+
 
     @Query(
         """
