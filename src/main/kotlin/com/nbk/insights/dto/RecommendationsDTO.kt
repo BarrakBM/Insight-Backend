@@ -7,6 +7,15 @@ data class ChatRequest(
     val temperature: Double = 0.7
 )
 
+data class CategoryRecommendationResponse(
+    val category: String,
+    val recommendation: String
+)
+
 data class Message(val role: String, val content: String)
 data class ChatResponse(val choices: List<Choice>)
 data class Choice(val message: Message)
+
+data class OffersRecommendationResponse(
+    val message: String
+)

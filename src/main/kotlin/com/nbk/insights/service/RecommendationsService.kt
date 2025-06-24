@@ -18,6 +18,8 @@ import org.springframework.web.reactive.function.client.WebClient
 import java.lang.RuntimeException
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
+import com.nbk.insights.dto.CategoryRecommendationResponse
+import com.nbk.insights.dto.OffersRecommendationResponse
 import java.time.LocalDateTime
 
 
@@ -30,19 +32,12 @@ class RecommendationsService(
     private val recommendationRepository: RecommendationRepository
 ) {
 
-    fun getCategoryRecommendations(userId: Long): String {
+    fun getCategoryRecommendations(userId: Long): List<CategoryRecommendationResponse> {
         val budgetAdherence = limitsService.checkBudgetAdherence(userId)
-
-        // Extract category names from user's limits
         val categories = budgetAdherence.categoryAdherences.map { it.category }.distinct()
-
-        // Fetch only the relevant offers
         val relevantOffers = offersRepository.findAllByMccCategories(categories)
-
-        // Build prompt
         val prompt = buildFullPrompt(budgetAdherence.categoryAdherences, relevantOffers)
 
-        // Call OpenAI
         val request = ChatRequest(
             model = "gpt-4o",
             messages = listOf(
@@ -61,33 +56,70 @@ class RecommendationsService(
             .bodyToMono(ChatResponse::class.java)
             .block() ?: throw RuntimeException("No response from OpenAI")
 
-        val responseContent = response.choices.firstOrNull()?.message?.content
+        val cleanedJson = response.choices.firstOrNull()?.message?.content
+            ?.replace("```json", "")?.replace("```", "")?.trim()
             ?: throw IllegalStateException("ChatGPT returned no valid content")
-
-        val cleanedJson = responseContent
-            .replace("```json", "")
-            .replace("```", "")
-            .trim()
 
         val mapper = jacksonObjectMapper()
         val parsedJson: List<Map<String, String>> = mapper.readValue(cleanedJson)
 
-        parsedJson.forEach { entry ->
-            val category = entry["category"] ?: return@forEach
-            val recommendation = entry["recommendation"] ?: return@forEach
-
-            recommendationRepository.save(
-                RecommendationEntity(
-                    userId = userId,
-                    reason = "[$category] $recommendation",
-                    createdAt = LocalDateTime.now()
+        val result = parsedJson.mapNotNull { entry ->
+            val category = entry["category"]
+            val recommendation = entry["recommendation"]
+            if (category != null && recommendation != null) {
+                recommendationRepository.save(
+                    RecommendationEntity(
+                        userId = userId,
+                        reason = "[$category] $recommendation",
+                        createdAt = LocalDateTime.now()
+                    )
                 )
+                CategoryRecommendationResponse(category, recommendation)
+            } else null
+        }
+
+        return result
+    }
+
+    fun getOffersRecommendation(userId: Long): OffersRecommendationResponse {
+
+        val latestRecommendations = recommendationRepository.findLatestRecommendationsPerCategory(userId)
+
+        if (latestRecommendations.isEmpty()) {
+            return OffersRecommendationResponse(
+                message = "No personalized offer insights available yet. Start budgeting to unlock your top NBK offers!"
             )
         }
 
-        return response.choices.firstOrNull()?.message?.content
-            ?: throw IllegalStateException("ChatGPT returned no valid content")
+        val categories = latestRecommendations.mapNotNull {
+            Regex("""\[(.*?)]""").find(it.reason)?.groupValues?.get(1)
+        }.distinct()
+
+        val relevantOffers = offersRepository.findAllByMccCategories(categories)
+
+        val prompt = buildBestOffersPrompt(categories, relevantOffers)
+
+        val request = ChatRequest(
+            model = "gpt-4o",
+            messages = listOf(
+                Message("system", "You are an NBK assistant recommending the best offers for a user based on their past recommendations and spending categories."),
+                Message("user", prompt)
+            ),
+            temperature = 0.5
+        )
+
+        val response = openAIWebClient.post()
+            .bodyValue(request)
+            .retrieve()
+            .bodyToMono(ChatResponse::class.java)
+            .block() ?: throw RuntimeException("No response from OpenAI")
+
+        val content = response.choices.firstOrNull()?.message?.content
+            ?: "Explore NBK offers tailored to your spending habits."
+
+        return OffersRecommendationResponse(message = content)
     }
+
 
     private fun buildFullPrompt(
         adherences: List<CategoryAdherence>,
@@ -157,5 +189,28 @@ class RecommendationsService(
 
         return builder.toString()
     }
+
+    private fun buildBestOffersPrompt(
+        categories: List<String>,
+        offers: List<OffersEntity>
+    ): String {
+        val builder = StringBuilder()
+
+        builder.appendLine("You are an assistant at NBK.")
+        builder.appendLine("This user has recently shown spending activity in the following categories:")
+        categories.forEach { builder.appendLine("- $it") }
+
+        builder.appendLine("\nHere are the available NBK offers per category:")
+        offers.groupBy { it.mccCategoryId }.forEach { (cat, list) ->
+            builder.appendLine("Category: $cat")
+            list.forEach { builder.appendLine("- ${it.description}") }
+        }
+
+        builder.appendLine("\nNow generate a single 1–2 sentence insight that highlights the most relevant NBK offers this user should check out.")
+        builder.appendLine("Use a friendly but professional tone. Be very concise. Do not mention more than 3 offers. Focus on what best matches their habits.")
+
+        return builder.toString()
+    }
+
 }
 
