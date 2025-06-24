@@ -62,3 +62,14 @@ data class BudgetAdherenceResponse(
     val totalSpent: BigDecimal,
     val accountsChecked: Int
 )
+
+data class SpendingTrendResponse(
+    val category: String,
+    val currentSpent: BigDecimal,
+    val lastMonthSpent: BigDecimal,
+    val spendingChange: BigDecimal,
+    val spendingChangePercentage: Double,
+    val trend: String,
+    val budgetAmount: BigDecimal,
+    val adherenceLevel: String
+)
