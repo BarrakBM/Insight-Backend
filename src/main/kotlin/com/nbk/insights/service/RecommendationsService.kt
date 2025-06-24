@@ -20,22 +20,22 @@ class RecommendationsService(
     private val openAIWebClient: WebClient,
     private val limitsService: LimitsService,
     private val userRepository: UserRepository,
-    private val offersRepository: OffersRepository // add this!
+    private val offersRepository: OffersRepository
 ) {
 
     fun getCategoryRecommendations(userId: Long): String {
         val budgetAdherence = limitsService.checkBudgetAdherence(userId)
 
-        // Step 1: Extract category names from user's limits
+        // Extract category names from user's limits
         val categories = budgetAdherence.categoryAdherences.map { it.category }.distinct()
 
-        // Step 2: Fetch only the relevant offers
+        // Fetch only the relevant offers
         val relevantOffers = offersRepository.findAllByMccCategories(categories)
 
-        // Step 3: Build prompt
+        // Build prompt
         val prompt = buildFullPrompt(budgetAdherence.categoryAdherences, relevantOffers)
 
-        // Step 4: Call OpenAI
+        // Call OpenAI
         val request = ChatRequest(
             model = "gpt-4o-mini",
             messages = listOf(
@@ -107,7 +107,7 @@ class RecommendationsService(
 
         builder.appendLine("\nNow reply in a JSON array format. Each element should have:")
         builder.appendLine("- category: the name of the spending category")
-        builder.appendLine("- recommendation: a helpful, friendly budgeting tip (mention NBK offers if available)")
+        builder.appendLine("- recommendation: your actual response")
 
         return builder.toString()
     }
