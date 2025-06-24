@@ -23,13 +23,20 @@ class TransactionController(
 ) {
 
     @GetMapping("/user/transactions")
-    fun fetchUserTransactions(): ResponseEntity<List<TransactionResponse>> {
+    fun fetchUserTransactions(
+        @RequestParam(required = false) category: String? = null,
+        @RequestParam(required = false) mccId: Long? = null,
+        @RequestParam(required = false, defaultValue = "none") period: String,
+        @RequestParam(required = false) year: Int? = null,
+        @RequestParam(required = false) month: Int? = null
+    ): ResponseEntity<List<TransactionResponse>> {
         val username = SecurityContextHolder.getContext().authentication.name
         val user = userRepository.findByUsername(username)
             ?: throw UsernameNotFoundException("User not found with email: $username")
-        val result = transactionsService.fetchUserTransactions(user.id)
+        val result = transactionsService.fetchUserTransactions(user.id, mccId, period, category, year, month)
         return ResponseEntity.ok(result)
     }
+
 
     @GetMapping("/account/transactions/{accountId}")
     fun fetchAccountTransactions(

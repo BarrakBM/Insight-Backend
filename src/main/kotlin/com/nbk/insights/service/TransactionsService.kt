@@ -22,12 +22,21 @@ class TransactionsService(
     private val mccRepository: MccRepository
 ) {
 
-    fun fetchUserTransactions(userId: Long?): List<TransactionResponse> {
+    fun fetchUserTransactions(
+        userId: Long?,
+        mccId: Long?,
+        period: String,
+        category: String?,
+        year: Int?,
+        month: Int?
+    ): List<TransactionResponse> {
 
-        val transactionCache = serverInsightsCache.getMap<Long, List<TransactionResponse>>("transactions-user")
+        val transactionCache = serverInsightsCache.getMap<String, List<TransactionResponse>>("transactions-user")
 
-        transactionCache[userId]?.let {
-            loggerUserTransaction.info("Returning list of transactions for userId=$userId from cache.")
+        val cacheKey = buildCacheKey(userId, category, mccId, period, year, month)
+
+        transactionCache[cacheKey]?.let {
+            loggerUserTransaction.info("Returning cached user transactions for key=$cacheKey")
             return it
         }
 
@@ -38,34 +47,54 @@ class TransactionsService(
 
         val accountIds = accounts.mapNotNull { it.id }
 
-        val transactions = transactionRepository
-            .findAllBySourceAccountIdInOrDestinationAccountIdIn(accountIds, accountIds)
+        val now = LocalDateTime.now()
+        val startDate = when {
+            year != null && month != null -> LocalDateTime.of(year, month, 1, 0, 0)
+            year != null && month == null -> LocalDateTime.of(year, 1, 1, 0, 0)
+            period.equals("monthly", ignoreCase = true) -> now.withDayOfMonth(1).toLocalDate().atStartOfDay()
+            period.equals("yearly", ignoreCase = true) -> now.withDayOfYear(1).toLocalDate().atStartOfDay()
+            period.equals("none", ignoreCase = true) -> null
+            else -> throw IllegalArgumentException("Invalid period: $period")
+        }
+
+        val endDate = when {
+            year != null && month != null -> startDate?.plusMonths(1)?.minusSeconds(1)
+            year != null && month == null -> startDate?.plusYears(1)?.minusSeconds(1)
+            else -> null
+        }
+
+        val transactions = transactionRepository.findFilteredUserTransactionsInRange(
+            accountIds = accountIds,
+            category = category,
+            mccId = mccId,
+            startDate = startDate,
+            endDate = endDate
+        )
 
         val mccIds = transactions.mapNotNull { it.mccId }.toSet()
         val mccMap = mccRepository.findAllById(mccIds).associateBy { it.id }
 
         val response = transactions.map { tx ->
             val mccEntity = tx.mccId?.let { mccMap[it] }
-            val mccDto = MCC(
-                category = mccEntity?.category ?: "Transfer",
-                subCategory = mccEntity?.subCategory ?: "Account"
-            )
-
             TransactionResponse(
                 id = tx.id,
                 sourceAccountId = tx.sourceAccountId,
                 destinationAccountId = tx.destinationAccountId,
                 amount = tx.amount,
                 transactionType = tx.transactionType,
-                mcc = mccDto,
+                mcc = MCC(
+                    category = mccEntity?.category ?: "Transfer",
+                    subCategory = mccEntity?.subCategory ?: "Account"
+                ),
                 createdAt = tx.createdAt
             )
         }
 
         loggerUserTransaction.info("No transaction(s) found, caching new data...")
-        transactionCache[userId] = response
+        transactionCache[cacheKey] = response
         return response
     }
+
 
     fun fetchAccountTransactions(
         accountId: Long?,
@@ -127,8 +156,8 @@ class TransactionsService(
                 amount = tx.amount,
                 transactionType = tx.transactionType,
                 mcc = MCC(
-                    category = mccEntity?.category ?: "unknown",
-                    subCategory = mccEntity?.subCategory ?: "unknown"
+                    category = mccEntity?.category ?: "Transfer",
+                    subCategory = mccEntity?.subCategory ?: "Account"
                 ),
                 createdAt = tx.createdAt
             )
