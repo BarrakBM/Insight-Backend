@@ -20,10 +20,9 @@ data class RecommendationEntity(
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Long? = null,
     val userId: Long,
-    val offerId: Long,
     val reason: String,
-    val createdAt: LocalDateTime,
+    val createdAt: LocalDateTime
     )
 {
-    constructor(): this(id = null, userId = 0, offerId = 0, reason = "", createdAt = LocalDateTime.now())
+    constructor(): this(id = null, userId = 0, reason = "", createdAt = LocalDateTime.now())
 }

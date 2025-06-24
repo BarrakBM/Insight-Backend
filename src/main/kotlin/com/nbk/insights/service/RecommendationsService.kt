@@ -7,6 +7,8 @@ import com.nbk.insights.dto.ChatResponse
 import com.nbk.insights.dto.Message
 import com.nbk.insights.repository.OffersEntity
 import com.nbk.insights.repository.OffersRepository
+import com.nbk.insights.repository.RecommendationEntity
+import com.nbk.insights.repository.RecommendationRepository
 import com.nbk.insights.repository.UserRepository
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.context.SecurityContextHolder
@@ -14,13 +16,18 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException
 import org.springframework.stereotype.Service
 import org.springframework.web.reactive.function.client.WebClient
 import java.lang.RuntimeException
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
+import java.time.LocalDateTime
+
 
 @Service
 class RecommendationsService(
     private val openAIWebClient: WebClient,
     private val limitsService: LimitsService,
     private val userRepository: UserRepository,
-    private val offersRepository: OffersRepository
+    private val offersRepository: OffersRepository,
+    private val recommendationRepository: RecommendationRepository
 ) {
 
     fun getCategoryRecommendations(userId: Long): String {
@@ -37,7 +44,7 @@ class RecommendationsService(
 
         // Call OpenAI
         val request = ChatRequest(
-            model = "gpt-4o-mini",
+            model = "gpt-4o",
             messages = listOf(
                 Message("system", "You are an assistant providing budgeting recommendations tailored to user's spending habits and available offers at NBK"),
                 Message("user", prompt)
@@ -54,6 +61,30 @@ class RecommendationsService(
             .bodyToMono(ChatResponse::class.java)
             .block() ?: throw RuntimeException("No response from OpenAI")
 
+        val responseContent = response.choices.firstOrNull()?.message?.content
+            ?: throw IllegalStateException("ChatGPT returned no valid content")
+
+        val cleanedJson = responseContent
+            .replace("```json", "")
+            .replace("```", "")
+            .trim()
+
+        val mapper = jacksonObjectMapper()
+        val parsedJson: List<Map<String, String>> = mapper.readValue(cleanedJson)
+
+        parsedJson.forEach { entry ->
+            val category = entry["category"] ?: return@forEach
+            val recommendation = entry["recommendation"] ?: return@forEach
+
+            recommendationRepository.save(
+                RecommendationEntity(
+                    userId = userId,
+                    reason = "[$category] $recommendation",
+                    createdAt = LocalDateTime.now()
+                )
+            )
+        }
+
         return response.choices.firstOrNull()?.message?.content
             ?: throw IllegalStateException("ChatGPT returned no valid content")
     }
@@ -65,15 +96,30 @@ class RecommendationsService(
         val builder = StringBuilder()
         builder.appendLine("You are a budgeting assistant for National Bank of Kuwait (NBK).")
         builder.appendLine("A user wants category-wise recommendations based on their monthly spending and budget adherence.")
-        builder.appendLine("You also have access to exclusive NBK offers related to each spending category.")
+        builder.appendLine("You also have access to exclusive NBK offers related to each spending category and make sure to mention they are from NBK.")
         builder.appendLine("Instructions:")
         builder.appendLine("- Use the data for each category.")
-        builder.appendLine("- Give JSON output: category as key, short friendly recommendation as value.")
-        builder.appendLine("- If they overspent, gently inform them and suggest NBK offers to help reduce next month’s spending. Do not just recommend to improve spending by offers only, give them generally good ways for them to stay within budget based on their insights")
-        builder.appendLine("- If they underspent significantly, praise them and recommend how to leverage NBK’s offers. Do not just recommend to improve spending by offers only, give them generally good ways for them to stay within budget based on their insights")
+        builder.appendLine("- Give JSON output: category as key, short friendly recommendation as value, no emojis, no HTML tags, no special characters, no rude tone and be as concise as possible with professionalism.")
+        builder.appendLine("- If they overspent, gently inform them that they have underspent and suggest NBK offers to help reduce next month’s spending. Do not just recommend to improve spending by offers only, give them generally good ways for them to stay within budget based on their insights, and if you recommend them something in the form of investment or saving their money look up any account types NBK would support doing that")
+        builder.appendLine("- If they underspent, inform them and praise them and recommend how to leverage NBK’s offers. Do not just recommend to improve spending by offers only, give them generally good ways for them to stay within budget based on their insights, and if you recommend them something in the form of investment or saving their money look up any account types NBK would support doing that")
         builder.appendLine("- If they are within budget, positively reinforce and suggest further optimization.")
-        builder.appendLine("- Use a friendly, concise tone. Prioritize personalization and empathy. Try to add emojis but nothing controversial or inappropriate in arabic culture")
+        builder.appendLine("- Use a friendly, concise tone. Prioritize personalization and empathy.")
         builder.appendLine("- Use the following list of NBK offers if they are relevant.\n")
+        builder.appendLine("- when mentioning money make sure to add KD right after the number \"17.89KD\"")
+        builder.appendLine("- when you want to mention how much they overspent or underspent use percentages and thats it no using terms like out of")
+        builder.appendLine("- Decision Logic:\n" +
+                " • Overspent (PercentageUsed > 100):\n" +
+                "   – Inform user of \"X% over budget.\"\n" +
+                "   – Offer one tip to reduce next month’s spending.\n" +
+                "   – Suggest relevant NBK offer.\n" +
+                " • Underspent (PercentageUsed < 50):\n" +
+                "   – Praise user for \"X% under budget.\"\n" +
+                "   – Offer one practical tip to stay on track.\n" +
+                "   – Suggest relevant NBK offer and optionally mention NBK Savings or Fixed Deposit.\n" +
+                "• On track (50 ≤ PercentageUsed ≤ 100):\n" +
+                "   – Reinforce \"You’re X% used.\"\n" +
+                "   – Offer one optimization tip.\n" +
+                "   – Suggest relevant NBK offer.")
 
         // Include only offers the user might care about
         offers.groupBy { it.mccCategoryId }.forEach { (mccId, offerGroup) ->
