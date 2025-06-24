@@ -32,21 +32,6 @@ interface TransactionRepository : JpaRepository<TransactionEntity, Long> {
         destinationAccountId: Long?
     ): List<TransactionEntity>
 
-    @Query("""
-            SELECT t.* FROM transactions t
-            LEFT JOIN mcc m ON t.mcc_id = m.id
-            WHERE t.source_account_id = :accountId
-              AND (COALESCE(:category, '') = '' OR m.category = :category)
-              AND (COALESCE(:startDate, TIMESTAMP '1970-01-01 00:00:00') = TIMESTAMP '1970-01-01 00:00:00' OR t.created_at >= :startDate)
-              AND (COALESCE(:mccId, -1) = -1 OR t.mcc_id = :mccId)
-            ORDER BY t.created_at DESC
-""", nativeQuery = true)
-    fun findFilteredTransactions(
-        @Param("accountId") accountId: Long?,
-        @Param("category") category: String?,
-        @Param("mccId") mccId: Long?,
-        @Param("startDate") startDate: LocalDateTime?
-    ): List<TransactionEntity>
 
     @Query("""
     SELECT t.* FROM transactions t
@@ -65,8 +50,6 @@ interface TransactionRepository : JpaRepository<TransactionEntity, Long> {
         @Param("startDate") startDate: LocalDateTime?,
         @Param("endDate") endDate: LocalDateTime?
     ): List<TransactionEntity>
-
-
 
 
     @Query(

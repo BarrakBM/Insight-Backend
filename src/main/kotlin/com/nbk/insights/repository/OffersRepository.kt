@@ -18,6 +18,14 @@ interface OffersRepository : JpaRepository<OffersEntity, Long> {
     WHERE m.category = :category
 """)
     fun findAllByMccCategory(@Param("category") category: String): List<OffersEntity>
+
+    @Query("""
+    SELECT o FROM OffersEntity o 
+    JOIN MccEntity m ON o.mccCategoryId = m.id 
+    WHERE m.category IN :categories
+""")
+    fun findAllByMccCategories(@Param("categories") categories: List<String>): List<OffersEntity>
+
 }
 
 @Entity

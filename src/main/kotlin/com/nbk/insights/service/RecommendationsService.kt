@@ -5,6 +5,8 @@ import com.nbk.insights.dto.CategoryAdherence
 import com.nbk.insights.dto.ChatRequest
 import com.nbk.insights.dto.ChatResponse
 import com.nbk.insights.dto.Message
+import com.nbk.insights.repository.OffersEntity
+import com.nbk.insights.repository.OffersRepository
 import com.nbk.insights.repository.UserRepository
 import org.springframework.http.HttpStatus
 import org.springframework.security.core.context.SecurityContextHolder
@@ -17,25 +19,31 @@ import java.lang.RuntimeException
 class RecommendationsService(
     private val openAIWebClient: WebClient,
     private val limitsService: LimitsService,
-    private val userRepository: UserRepository
+    private val userRepository: UserRepository,
+    private val offersRepository: OffersRepository // add this!
 ) {
 
     fun getCategoryRecommendations(userId: Long): String {
+        val budgetAdherence = limitsService.checkBudgetAdherence(userId)
 
-        // Get full adherence report
-        val budgetAdherence: BudgetAdherenceResponse = limitsService.checkBudgetAdherence(userId)
+        // Step 1: Extract category names from user's limits
+        val categories = budgetAdherence.categoryAdherences.map { it.category }.distinct()
 
-        // Build rich prompt from all CategoryAdherence data
-        val prompt = buildFullPrompt(budgetAdherence.categoryAdherences)
+        // Step 2: Fetch only the relevant offers
+        val relevantOffers = offersRepository.findAllByMccCategories(categories)
 
-        // Call OpenAI API
+        // Step 3: Build prompt
+        val prompt = buildFullPrompt(budgetAdherence.categoryAdherences, relevantOffers)
+
+        // Step 4: Call OpenAI
         val request = ChatRequest(
             model = "gpt-4o-mini",
             messages = listOf(
                 Message("system", "You are an assistant providing budgeting recommendations tailored to user's spending habits and available offers at NBK"),
                 Message("user", prompt)
             ),
-            temperature = 0.7)
+            temperature = 0.7
+        )
 
         val response = openAIWebClient.post()
             .bodyValue(request)
@@ -50,28 +58,38 @@ class RecommendationsService(
             ?: throw IllegalStateException("ChatGPT returned no valid content")
     }
 
-    private fun buildFullPrompt(adherences: List<CategoryAdherence>): String {
+    private fun buildFullPrompt(
+        adherences: List<CategoryAdherence>,
+        offers: List<OffersEntity>
+    ): String {
         val builder = StringBuilder()
         builder.appendLine("You are a budgeting assistant for National Bank of Kuwait (NBK).")
         builder.appendLine("A user wants category-wise recommendations based on their monthly spending and budget adherence.")
+        builder.appendLine("You also have access to exclusive NBK offers related to each spending category.")
         builder.appendLine("Instructions:")
         builder.appendLine("- Use the data for each category.")
         builder.appendLine("- Give JSON output: category as key, short friendly recommendation as value.")
-        builder.appendLine("- Mention NBK offers or suggest practical ways to save if overspending.")
-        builder.appendLine("- If they overspent, gently inform them, suggest how to improve next month, and encourage usage of specific NBK offers to save more.\n")
-        builder.appendLine("- If they underspent significantly, positively reinforce their good financial management, and suggest how they can benefit even further from NBK's offers.\n")
-        builder.appendLine("- if they are within budget, congratulate them positively for following their budget")
-        builder.appendLine("- Friendly, concise, supportive, consider the user's needs and budget. And see if there are relevant offers from NBK related to their budget category type and give it to them as recommendations.")
-        builder.appendLine("- Do not only give them recommendations related to NBK offers, also give them general recommendations on how someone can lessen overspending and underspending based on the severity")
-        builder.appendLine("Here’s the user's data:")
+        builder.appendLine("- If they overspent, gently inform them and suggest NBK offers to help reduce next month’s spending. Do not just recommend to improve spending by offers only, give them generally good ways for them to stay within budget based on their insights")
+        builder.appendLine("- If they underspent significantly, praise them and recommend how to leverage NBK’s offers. Do not just recommend to improve spending by offers only, give them generally good ways for them to stay within budget based on their insights")
+        builder.appendLine("- If they are within budget, positively reinforce and suggest further optimization.")
+        builder.appendLine("- Use a friendly, concise tone. Prioritize personalization and empathy. Try to add emojis but nothing controversial or inappropriate in arabic culture")
+        builder.appendLine("- Use the following list of NBK offers if they are relevant.\n")
 
+        // Include only offers the user might care about
+        offers.groupBy { it.mccCategoryId }.forEach { (mccId, offerGroup) ->
+            val mcc = offerGroup.first().mccCategoryId
+            val descriptions = offerGroup.joinToString(separator = "\n- ") { it.description }
+            builder.appendLine("Offers for MCC ID $mcc:\n- $descriptions\n")
+        }
+
+        builder.appendLine("\nHere’s the user's budget data:")
         adherences.forEach {
             builder.appendLine("""
             {
               "Category": "${it.category}",
               "BudgetAmount": "${it.budgetAmount} KWD",
               "SpentAmount": "${it.spentAmount} KWD",
-              "PercentageUsed": "${String.format("%.2f", it.percentageUsed)}%",
+              "PercentageUsed": "${"%.2f".format(it.percentageUsed)}%",
               "RemainingAmount": "${it.remainingAmount} KWD",
               "AdherenceLevel": "${it.adherenceLevel.displayName}",
               "RenewalDate": "${it.renewsAt}",
@@ -82,25 +100,16 @@ class RecommendationsService(
               "LastMonthSpent": "${it.lastMonthSpentAmount} KWD",
               "SpendingTrend": "${it.spendingTrend.displayName}",
               "SpendingChange": "${it.spendingChange} KWD",
-              "SpendingChangePercentage": "${String.format("%.2f", it.spendingChangePercentage)}%"
+              "SpendingChangePercentage": "${"%.2f".format(it.spendingChangePercentage)}%"
             },
             """.trimIndent())
         }
 
-        builder.appendLine()
-        builder.appendLine("Now reply in a JSON array format. Each element should have:")
+        builder.appendLine("\nNow reply in a JSON array format. Each element should have:")
         builder.appendLine("- category: the name of the spending category")
-        builder.appendLine("- recommendation: a helpful, friendly budgeting tip (with NBK offers if possible)")
-        builder.appendLine("Example:")
-        builder.appendLine("""
-        [
-          {
-            "category": "Groceries",
-            "recommendation": "Use NBK’s grocery cashback offers and plan weekly meals to reduce waste."
-          }
-        ]
-        """.trimIndent())
+        builder.appendLine("- recommendation: a helpful, friendly budgeting tip (mention NBK offers if available)")
 
         return builder.toString()
     }
 }
+

@@ -129,8 +129,8 @@ class TransactionsService(
                 amount = tx.amount,
                 transactionType = tx.transactionType,
                 mcc = MCC(
-                    category = mccEntity?.category ?: "unknown",
-                    subCategory = mccEntity?.subCategory ?: "unknown"
+                    category = mccEntity?.category ?: "Transfer",
+                    subCategory = mccEntity?.subCategory ?: "Account"
                 ),
                 createdAt = tx.createdAt
             )
