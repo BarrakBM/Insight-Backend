@@ -2,7 +2,7 @@ package com.nbk.insights.dto
 
 
 data class ChatRequest(
-    val model: String = "gpt-4o-mini",
+    val model: String = "gpt-4o",
     val messages: List<Message>,
     val temperature: Double = 0.7
 )
