@@ -82,23 +82,28 @@ class RecommendationsService(
     }
 
     fun getOffersRecommendation(userId: Long): OffersRecommendationResponse {
-
+        // Step 1: Get latest recommendations history per category
         val latestRecommendations = recommendationRepository.findLatestRecommendationsPerCategory(userId)
 
         if (latestRecommendations.isEmpty()) {
             return OffersRecommendationResponse(
-                message = "No personalized offer insights available yet. Start budgeting to unlock your top NBK offers!"
+                message = "No personalized offer insights available yet. Start budgeting to unlock your top NBK offers!",
+                offerIds = emptyList()
             )
         }
 
+        // Step 2: Extract categories from saved recommendations
         val categories = latestRecommendations.mapNotNull {
             Regex("""\[(.*?)]""").find(it.reason)?.groupValues?.get(1)
         }.distinct()
 
+        // Step 3: Fetch only relevant offers tied to those categories (via MCCs)
         val relevantOffers = offersRepository.findAllByMccCategories(categories)
 
+        // Step 4: Generate prompt with full offer details (used in buildBestOffersPrompt)
         val prompt = buildBestOffersPrompt(categories, relevantOffers)
 
+        // Step 5: Send prompt to ChatGPT
         val request = ChatRequest(
             model = "gpt-4o",
             messages = listOf(
@@ -115,10 +120,26 @@ class RecommendationsService(
             .block() ?: throw RuntimeException("No response from OpenAI")
 
         val content = response.choices.firstOrNull()?.message?.content
-            ?: "Explore NBK offers tailored to your spending habits."
+            ?: throw RuntimeException("ChatGPT returned no content")
 
-        return OffersRecommendationResponse(message = content)
+        // Step 6: Clean and parse the JSON
+        val cleanedJson = content.replace("```json", "").replace("```", "").trim()
+
+        val mapper = jacksonObjectMapper()
+        val parsed = mapper.readValue<Map<String, Any>>(cleanedJson)
+
+        val message = parsed["message"] as? String
+            ?: throw IllegalStateException("Missing message in ChatGPT response")
+
+        val offerIds = (parsed["offerIds"] as? List<*>)?.mapNotNull { it.toString().toLongOrNull() }
+            ?: emptyList()
+
+        return OffersRecommendationResponse(
+            message = message,
+            offerIds = offerIds
+        )
     }
+
 
 
     private fun buildFullPrompt(
@@ -196,18 +217,43 @@ class RecommendationsService(
     ): String {
         val builder = StringBuilder()
 
-        builder.appendLine("You are an assistant at NBK.")
-        builder.appendLine("This user has recently shown spending activity in the following categories:")
-        categories.forEach { builder.appendLine("- $it") }
+        builder.appendLine("You are an assistant for the National Bank of Kuwait (NBK).")
+        builder.appendLine("The user is looking for the most suitable offers to explore based on their recent spending patterns and categories they received recommendations for.")
+        builder.appendLine("You are given a list of offers by category (MCC ID) that the user is eligible for.")
+        builder.appendLine("You must write a short, friendly, and informative message suggesting the best offers based on the user's interests and prior recommendations.")
 
-        builder.appendLine("\nHere are the available NBK offers per category:")
-        offers.groupBy { it.mccCategoryId }.forEach { (cat, list) ->
-            builder.appendLine("Category: $cat")
-            list.forEach { builder.appendLine("- ${it.description}") }
+        builder.appendLine()
+        builder.appendLine("Instructions:")
+        builder.appendLine("- Write a clear and concise message (1–2 sentences) summarizing which offers they should explore based on their spending and recommendations.")
+        builder.appendLine("- DO NOT list every offer. Pick only the most relevant ones across all categories.")
+        builder.appendLine("- Keep the tone helpful, positive, and brief.")
+        builder.appendLine("- Only recommend actual NBK offers provided below.")
+        builder.appendLine("- When referencing money, write values like this: '10KD'.")
+        builder.appendLine("- Avoid using special characters, emojis, or HTML tags.")
+        builder.appendLine("- Prioritize relevance over quantity — the goal is to highlight the *best-fit* offers.")
+        builder.appendLine()
+        builder.appendLine("Output format (in JSON):")
+        builder.appendLine(
+            """
+        {
+          "message": "<your recommendation message>",
+          "offerIds": [<IDs of the offers you mentioned in the message>]
         }
+        """.trimIndent()
+        )
+        builder.appendLine("- Do NOT include offerIds unless the offer was actually mentioned in the message.")
+        builder.appendLine("- Be accurate when mapping descriptions to IDs.")
 
-        builder.appendLine("\nNow generate a single 1–2 sentence insight that highlights the most relevant NBK offers this user should check out.")
-        builder.appendLine("Use a friendly but professional tone. Be very concise. Do not mention more than 3 offers. Focus on what best matches their habits.")
+        builder.appendLine()
+        builder.appendLine("Here are the NBK offers grouped by MCC category:")
+
+        offers.groupBy { it.mccCategoryId }.forEach { (mccId, offerGroup) ->
+            builder.appendLine("Offers for MCC ID $mccId:")
+            offerGroup.forEach { offer ->
+                builder.appendLine("- ID ${offer.id}: ${offer.description}")
+            }
+            builder.appendLine()
+        }
 
         return builder.toString()
     }
