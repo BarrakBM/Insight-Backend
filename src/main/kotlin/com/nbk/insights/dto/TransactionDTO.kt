@@ -2,6 +2,7 @@ package com.nbk.insights.dto
 
 import com.nbk.insights.repository.TransactionType
 import java.math.BigDecimal
+import java.time.LocalDate
 import java.time.LocalDateTime
 
 data class TransactionResponse(
@@ -25,4 +26,16 @@ enum class Category{
     SHOPPING,
     FOOD_AND_GROCERIES,
     OTHER
+}
+
+data class CashFlowCategorizedResponse(
+    val moneyIn: BigDecimal,
+    val moneyOut: BigDecimal,
+    val moneyInByCategory: Map<String, BigDecimal>,
+    val moneyOutByCategory: Map<String, BigDecimal>,
+    val from: LocalDate,
+    val to: LocalDate
+) {
+    val netCashFlow: BigDecimal
+        get() = moneyIn.subtract(moneyOut)
 }
