@@ -17,5 +17,6 @@ data class ChatResponse(val choices: List<Choice>)
 data class Choice(val message: Message)
 
 data class OffersRecommendationResponse(
-    val message: String
+    val message: String,
+    val offerIds: List<Long>
 )
