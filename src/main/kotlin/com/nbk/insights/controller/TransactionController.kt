@@ -1,5 +1,6 @@
 package com.nbk.insights.controller
 
+import com.nbk.insights.dto.CashFlowCategorizedResponse
 import com.nbk.insights.dto.RecurringPaymentResponse
 import com.nbk.insights.dto.TransactionResponse
 import com.nbk.insights.repository.UserRepository
@@ -8,11 +9,7 @@ import com.nbk.insights.service.TransactionsService
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.security.core.userdetails.UsernameNotFoundException
-import org.springframework.web.bind.annotation.GetMapping
-import org.springframework.web.bind.annotation.PathVariable
-import org.springframework.web.bind.annotation.RequestMapping
-import org.springframework.web.bind.annotation.RequestParam
-import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.bind.annotation.*
 
 @RequestMapping("/retrieve")
 @RestController
@@ -32,7 +29,7 @@ class TransactionController(
     ): ResponseEntity<List<TransactionResponse>> {
         val username = SecurityContextHolder.getContext().authentication.name
         val user = userRepository.findByUsername(username)
-            ?: throw UsernameNotFoundException("User not found with email: $username")
+            ?: throw UsernameNotFoundException("User not found")
         val result = transactionsService.fetchUserTransactions(user.id, mccId, period, category, year, month)
         return ResponseEntity.ok(result)
     }
@@ -49,8 +46,9 @@ class TransactionController(
     ): ResponseEntity<List<TransactionResponse>> {
         val username = SecurityContextHolder.getContext().authentication.name
         val user = userRepository.findByUsername(username)
-            ?: throw UsernameNotFoundException("User not found with email: $username")
-        val result = transactionsService.fetchAccountTransactions(accountId, user.id, mccId, period, category, year, month)
+            ?: throw UsernameNotFoundException("User not found")
+        val result =
+            transactionsService.fetchAccountTransactions(accountId, user.id, mccId, period, category, year, month)
         return ResponseEntity.ok(result)
     }
 
@@ -60,9 +58,33 @@ class TransactionController(
     ): ResponseEntity<List<RecurringPaymentResponse>> {
         val username = SecurityContextHolder.getContext().authentication.name
         val user = userRepository.findByUsername(username)
-            ?: throw UsernameNotFoundException("User not found with email: $username")
+            ?: throw UsernameNotFoundException("User not found")
 
         val payments = recurringPaymentService.detectRecurringPaymentsDynamic(accountId, user.id)
         return ResponseEntity.ok(payments)
+    }
+
+    @GetMapping("/cash-flow/last/month")
+    fun retrieveLastMonth(): ResponseEntity<CashFlowCategorizedResponse> {
+
+        val username = SecurityContextHolder.getContext().authentication.name
+        val userId = userRepository.findByUsername(username)?.id
+            ?: throw UsernameNotFoundException("User not found")
+
+        val flow = transactionsService.getUserPreviousMonthCashFlow(userId = userId)
+        return ResponseEntity.ok(flow)
+
+    }
+
+    @GetMapping("/cash-flow/this/month")
+    fun retrieveThisMonth(): ResponseEntity<CashFlowCategorizedResponse> {
+
+        val username = SecurityContextHolder.getContext().authentication.name
+        val userId = userRepository.findByUsername(username)?.id
+            ?: throw UsernameNotFoundException("User not found")
+
+        val flow = transactionsService.getUserCurrentMonthCashFlow(userId = userId)
+        return ResponseEntity.ok(flow)
+
     }
 }
