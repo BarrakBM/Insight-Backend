@@ -18,8 +18,10 @@ import org.springframework.web.reactive.function.client.WebClient
 import java.lang.RuntimeException
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
+import com.nbk.insights.dto.CashFlowCategorizedResponse
 import com.nbk.insights.dto.CategoryRecommendationResponse
 import com.nbk.insights.dto.OffersRecommendationResponse
+import com.nbk.insights.dto.QuickInsightsResponse
 import java.time.LocalDateTime
 
 
@@ -29,7 +31,8 @@ class RecommendationsService(
     private val limitsService: LimitsService,
     private val userRepository: UserRepository,
     private val offersRepository: OffersRepository,
-    private val recommendationRepository: RecommendationRepository
+    private val recommendationRepository: RecommendationRepository,
+    private val transactionsService: TransactionsService
 ) {
 
     fun getCategoryRecommendations(userId: Long): List<CategoryRecommendationResponse> {
@@ -140,6 +143,34 @@ class RecommendationsService(
         )
     }
 
+    fun getQuickInsights(userId: Long): QuickInsightsResponse {
+        val thisMonth = transactionsService.getUserCurrentMonthCashFlow(userId)
+        val lastMonth = transactionsService.getUserPreviousMonthCashFlow(userId)
+        val adherence = limitsService.checkBudgetAdherence(userId)
+
+        val prompt = buildQuickInsightsPrompt(thisMonth, lastMonth, adherence)
+
+        val request = ChatRequest(
+            model = "gpt-4o",
+            messages = listOf(
+                Message("system", "You provide financial summary insights"),
+                Message("user", prompt)
+            ),
+            temperature = 0.7
+        )
+
+        val chatResponse = openAIWebClient.post()
+            .bodyValue(request)
+            .retrieve()
+            .bodyToMono(ChatResponse::class.java)
+            .block() ?: throw RuntimeException("No response from ChatGPT")
+
+        val jsonContent = chatResponse.choices.firstOrNull()?.message?.content
+            ?.replace("```json", "")?.replace("```", "")?.trim()
+            ?: throw RuntimeException("No valid content from GPT")
+
+        return jacksonObjectMapper().readValue(jsonContent, QuickInsightsResponse::class.java)
+    }
 
 
     private fun buildFullPrompt(
@@ -258,5 +289,62 @@ class RecommendationsService(
         return builder.toString()
     }
 
+    private fun buildQuickInsightsPrompt(
+        thisMonth: CashFlowCategorizedResponse,
+        lastMonth: CashFlowCategorizedResponse,
+        adherence: BudgetAdherenceResponse
+    ): String {
+        return buildString {
+            appendLine("You are an assistant helping users understand their financial behavior using data from NBK. Make sure the suggestions for each field is short enough to add in a card in a lazy row in the frontend")
+            appendLine("Each insight should be unique and not repeat information covered in the others.")
+            appendLine("Based on the information below, generate 3 short insights:")
+            appendLine("1. spendingComparedToLastMonth - a brief summary comparing this month's vs last month's total spending. Mention actual KD values (e.g., You spent 124KD less than last month), and optionally percentage (e.g., 40% less). Do NOT use confusing expressions like '0.6 times less'. Avoid using 'times' language completely.")
+            appendLine("2. budgetLimitWarning - identify any categories where spending is near, at, or over the budget (mention category names and level) an example for this is you exceeded the category budget by X times this amount or underspent. if all are within budget just tell them that their are well within their budget")
+            appendLine("3. savingInsights - offer a savings-oriented insight such as identifying good cash flow surplus, recommending categories where they can allocate more to savings, or suggesting saving behaviors based on low spending (e.g., consider saving the unused amount). Highlight opportunities to put money aside or where habits indicate long-term saving potential.")
+            appendLine("Avoid generic advice and refer to actual data in your message.")
+
+            appendLine("\nReturn only a JSON response with the following structure:")
+            appendLine("{")
+            appendLine("  \"spendingComparedToLastMonth\": \"...\",")
+            appendLine("  \"budgetLimitWarning\": \"...\",")
+            appendLine("  \"savingInsights\": \"...\"")
+            appendLine("}")
+
+            appendLine("\n--- Current Month Cash Flow ---")
+            appendLine("Total Money In: ${thisMonth.moneyIn}KD")
+            appendLine("Total Money Out: ${thisMonth.moneyOut}KD")
+            appendLine("Net Cash Flow: ${thisMonth.netCashFlow}KD")
+
+            appendLine("\nMoney Out by Category:")
+            thisMonth.moneyOutByCategory.forEach { (category, amount) ->
+                appendLine("- $category: ${amount}KD")
+            }
+
+            appendLine("\n--- Previous Month Cash Flow ---")
+            appendLine("Total Money In: ${lastMonth.moneyIn}KD")
+            appendLine("Total Money Out: ${lastMonth.moneyOut}KD")
+            appendLine("Net Cash Flow: ${lastMonth.netCashFlow}KD")
+
+            appendLine("\nMoney Out by Category (Last Month):")
+            lastMonth.moneyOutByCategory.forEach { (category, amount) ->
+                appendLine("- $category: $amount KD")
+            }
+
+            appendLine("\n--- Budget Adherence ---")
+            appendLine("Total Budget: ${adherence.totalBudget}KD")
+            appendLine("Total Spent: ${adherence.totalSpent}KD")
+            appendLine("Overall Adherence: ${adherence.overallAdherence.displayName}")
+
+            adherence.categoryAdherences.forEach {
+                appendLine("- ${it.category}:")
+                appendLine("  - Budget: ${it.budgetAmount}KD")
+                appendLine("  - Spent: ${it.spentAmount}KD")
+                appendLine("  - Usage: ${String.format("%.1f", it.percentageUsed)}% (${it.adherenceLevel.displayName})")
+                appendLine("  - Remaining: ${it.remainingAmount}KD")
+                appendLine("  - Spending Trend: ${it.spendingTrend.displayName}")
+                appendLine("  - Change from last month: ${it.spendingChange}KD (${String.format("%.1f", it.spendingChangePercentage)}%)")
+            }
+        }
+    }
 }
 
