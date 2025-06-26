@@ -20,3 +20,9 @@ data class OffersRecommendationResponse(
     val message: String,
     val offerIds: List<Long>
 )
+
+data class QuickInsightsResponse(
+    val spendingComparedToLastMonth: String,
+    val budgetLimitWarning: String,
+    val savingInsights: String
+)

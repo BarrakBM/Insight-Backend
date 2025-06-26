@@ -3,6 +3,7 @@ package com.nbk.insights.controller
 import com.nbk.insights.dto.CategoryRecommendationResponse
 import com.nbk.insights.dto.OfferDTO
 import com.nbk.insights.dto.OffersRecommendationResponse
+import com.nbk.insights.dto.QuickInsightsResponse
 import com.nbk.insights.repository.UserRepository
 import com.nbk.insights.service.OffersService
 import com.nbk.insights.service.RecommendationsService
@@ -52,4 +53,15 @@ class RecommendationController(
         val offers = offersService.getOffersByCategory(category)
         return ResponseEntity.ok(offers)
     }
+
+    @GetMapping("/quick-insights")
+    fun getQuickInsights(): ResponseEntity<QuickInsightsResponse> {
+        val username = SecurityContextHolder.getContext().authentication.name
+        val userId = userRepository.findByUsername(username)?.id
+            ?: throw UsernameNotFoundException("User not found")
+
+        val insights = openAIService.getQuickInsights(userId)
+        return ResponseEntity.ok(insights)
+    }
+
 }
