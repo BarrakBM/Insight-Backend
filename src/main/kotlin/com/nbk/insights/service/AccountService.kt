@@ -125,23 +125,23 @@ class AccountService(
     }
 
     fun deactivateLimit(userId: Long, limitId: Long) {
-
         require(userId > 0) { "Invalid user ID: must be greater than 0." }
         require(limitId > 0) { "Invalid limit ID: must be greater than 0." }
 
         val accounts = accountRepository.findByUserId(userId)
 
-        for (account in accounts) {
-            val limit = limitsRepository.findByAccountId(account.id!!)
-
-            if (limit != null && limit.id != limitId) {
-                throw IllegalAccessException("Limit ID mismatch")
-            }
+        val belongsToUser = accounts.any { account ->
+            limitsRepository.findAllByAccountId(account.id!!)?.any { it.id == limitId } ?: false
         }
 
-        val limitEntity = limitsRepository.findById(limitId).get()
+        if (!belongsToUser) {
+            throw IllegalAccessException("Limit ID does not belong to this user")
+        }
+
+        val limitEntity = limitsRepository.findById(limitId)
+            .orElseThrow { IllegalArgumentException("Limit not found") }
+
         limitEntity.isActive = false
         limitsRepository.save(limitEntity)
     }
-
 }
