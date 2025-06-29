@@ -87,4 +87,16 @@ class TransactionController(
         return ResponseEntity.ok(flow)
 
     }
+
+    @GetMapping("/cash-flow/this/month/{accountId}")
+    fun retrieveAccountThisMonth(@PathVariable accountId: Long): ResponseEntity<CashFlowCategorizedResponse> {
+
+        val username = SecurityContextHolder.getContext().authentication.name
+        val userId = userRepository.findByUsername(username)?.id
+            ?: throw UsernameNotFoundException("User not found")
+
+        val flow = transactionsService.getAccountCurrentMonthCashFlow(userId = userId, accountId = accountId)
+        return ResponseEntity.ok(flow)
+
+    }
 }

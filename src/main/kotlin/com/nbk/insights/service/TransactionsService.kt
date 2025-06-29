@@ -260,7 +260,44 @@ class TransactionsService(
             to = today
         )
     }
+    fun getAccountCurrentMonthCashFlow(
+        accountId: Long,
+        userId: Long
+    ): CashFlowCategorizedResponse {
 
+        // TODO: check ownership
+
+        val today = LocalDate.now()
+        val firstDayOfCurrentMonth = today.withDayOfMonth(1)
+        val currentYear = today.year
+        val currentMonth = today.monthValue
+
+        // Fetch transactions for the current month using year and month parameters
+        val transactions = fetchUserTransactions(
+            userId = userId,
+            mccId = null,
+            period = "none", // Using year/month params instead
+            category = null,
+            year = currentYear,
+            month = currentMonth
+        )
+
+        // Filter transactions to only include those up to and including today AND involving the specific account
+        val filteredTransactions = transactions.filter { transaction ->
+            val transactionDate = transaction.createdAt.toLocalDate()
+            val isDateInRange = !transactionDate.isBefore(firstDayOfCurrentMonth) && !transactionDate.isAfter(today)
+            val involvesAccount = transaction.sourceAccountId == accountId || transaction.destinationAccountId == accountId
+
+            isDateInRange && involvesAccount
+        }
+
+        return calculateCashFlowWithCategoriesPerAccount(
+            accountId = accountId,
+            transactions = filteredTransactions,
+            from = firstDayOfCurrentMonth,
+            to = today
+        )
+    }
     private fun calculateCashFlowWithCategories(
         mainAccountId: Long,
         savingsAccountId: Long,
@@ -329,6 +366,70 @@ class TransactionsService(
             to = to
         )
     }
+    private fun calculateCashFlowWithCategoriesPerAccount(
+        accountId: Long,
+        transactions: List<TransactionResponse>,
+        from: LocalDate,
+        to: LocalDate
+    ): CashFlowCategorizedResponse {
+        var moneyIn = BigDecimal.ZERO
+        var moneyOut = BigDecimal.ZERO
+        val moneyInByCategory = mutableMapOf<String, BigDecimal>()
+        val moneyOutByCategory = mutableMapOf<String, BigDecimal>()
+
+        transactions.forEach { transaction ->
+            val category = transaction.mcc.category
+
+            when (transaction.transactionType) {
+                TransactionType.CREDIT -> {
+                    moneyIn = moneyIn.add(transaction.amount)
+                    moneyInByCategory[category] = moneyInByCategory.getOrDefault(category, BigDecimal.ZERO)
+                        .add(transaction.amount)
+                }
+
+                TransactionType.DEBIT -> {
+                    moneyOut = moneyOut.add(transaction.amount)
+                    moneyOutByCategory[category] = moneyOutByCategory.getOrDefault(category, BigDecimal.ZERO)
+                        .add(transaction.amount)
+                }
+
+                TransactionType.TRANSFER -> {
+                    val isSourceThisAccount = transaction.sourceAccountId == accountId
+                    val isDestinationThisAccount = transaction.destinationAccountId == accountId
+
+                    when {
+                        // For account-level, we always process transfers since we're looking at a single account
+                        // Unlike user-level where we skip internal transfers between user's own accounts
+
+                        isSourceThisAccount -> {
+                            moneyOut = moneyOut.add(transaction.amount)
+                            moneyOutByCategory[category] = moneyOutByCategory.getOrDefault(category, BigDecimal.ZERO)
+                                .add(transaction.amount)
+                        }
+
+                        isDestinationThisAccount -> {
+                            moneyIn = moneyIn.add(transaction.amount)
+                            moneyInByCategory[category] = moneyInByCategory.getOrDefault(category, BigDecimal.ZERO)
+                                .add(transaction.amount)
+                        }
+                    }
+                }
+
+                else -> {
+                    // Handle other transaction types if needed
+                }
+            }
+        }
+
+        return CashFlowCategorizedResponse(
+            moneyIn = moneyIn,
+            moneyOut = moneyOut,
+            moneyInByCategory = moneyInByCategory,
+            moneyOutByCategory = moneyOutByCategory,
+            from = from,
+            to = to
+        )
+    }
 
     // Alternative
     /**
@@ -368,5 +469,4 @@ class TransactionsService(
             to = today
         )
     }
-
 }
