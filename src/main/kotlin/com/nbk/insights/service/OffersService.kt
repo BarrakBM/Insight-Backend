@@ -11,9 +11,6 @@ class OffersService(
     val offersRepository: OffersRepository
 ){
     fun getOffersByCategory(category: String): List<OfferResponse> {
-        val offers = offersRepository.findAllByMccCategory(category)
-        return offers.map {
-            OfferResponse(it.id!!, it.description)
-        }
+        return offersRepository.findOfferResponsesByCategory(category)
     }
 }
