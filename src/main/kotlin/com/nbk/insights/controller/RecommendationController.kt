@@ -1,7 +1,7 @@
 package com.nbk.insights.controller
 
 import com.nbk.insights.dto.CategoryRecommendationResponse
-import com.nbk.insights.dto.OfferDTO
+import com.nbk.insights.dto.OfferResponse
 import com.nbk.insights.dto.OffersRecommendationResponse
 import com.nbk.insights.dto.QuickInsightsResponse
 import com.nbk.insights.repository.UserRepository
@@ -46,7 +46,7 @@ class RecommendationController(
 
 
     @GetMapping("/offer/category")
-    fun getOffers(@RequestParam("category") category: String): ResponseEntity<List<OfferDTO>> {
+    fun getOffers(@RequestParam("category") category: String): ResponseEntity<List<OfferResponse>> {
         val username = SecurityContextHolder.getContext().authentication.name
         val userId = userRepository.findByUsername(username)?.id
             ?: throw UsernameNotFoundException("User not found with username: $username")
