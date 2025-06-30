@@ -20,8 +20,10 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.nbk.insights.dto.CashFlowCategorizedResponse
 import com.nbk.insights.dto.CategoryRecommendationResponse
+import com.nbk.insights.dto.OfferBrief
 import com.nbk.insights.dto.OffersRecommendationResponse
 import com.nbk.insights.dto.QuickInsightsResponse
+import com.nbk.insights.repository.MccRepository
 import java.time.LocalDateTime
 
 
@@ -32,7 +34,8 @@ class RecommendationsService(
     private val userRepository: UserRepository,
     private val offersRepository: OffersRepository,
     private val recommendationRepository: RecommendationRepository,
-    private val transactionsService: TransactionsService
+    private val transactionsService: TransactionsService,
+    private val mccRepository: MccRepository,
 ) {
 
     fun getCategoryRecommendations(userId: Long): List<CategoryRecommendationResponse> {
@@ -85,32 +88,36 @@ class RecommendationsService(
     }
 
     fun getOffersRecommendation(userId: Long): OffersRecommendationResponse {
-        // Step 1: Get latest recommendations history per category
         val latestRecommendations = recommendationRepository.findLatestRecommendationsPerCategory(userId)
 
         if (latestRecommendations.isEmpty()) {
             return OffersRecommendationResponse(
                 message = "No personalized offer insights available yet. Start budgeting to unlock your top NBK offers!",
-                offerIds = emptyList()
+                offers = emptyList()
             )
         }
 
-        // Step 2: Extract categories from saved recommendations
         val categories = latestRecommendations.mapNotNull {
             Regex("""\[(.*?)]""").find(it.reason)?.groupValues?.get(1)
         }.distinct()
 
-        // Step 3: Fetch only relevant offers tied to those categories (via MCCs)
-        val relevantOffers = offersRepository.findAllByMccCategories(categories)
+        // Fetch offer details with subcategory
+        val relevantOffers = offersRepository.findAllByMccCategories(categories).mapNotNull { offerEntity ->
+            val mccEntity = mccRepository.findById(offerEntity.mccCategoryId).orElse(null)
+            OfferBrief(
+                id = offerEntity.id,
+                description = offerEntity.description,
+                subCategory = mccEntity?.subCategory
+            )
+        }
 
-        // Step 4: Generate prompt with full offer details (used in buildBestOffersPrompt)
+
         val prompt = buildBestOffersPrompt(categories, relevantOffers)
 
-        // Step 5: Send prompt to ChatGPT
         val request = ChatRequest(
             model = "gpt-4o",
             messages = listOf(
-                Message("system", "You are an NBK assistant recommending the best offers for a user based on their past recommendations and spending categories."),
+                Message("system", "You are an NBK assistant recommending the best offers..."),
                 Message("user", prompt)
             ),
             temperature = 0.5
@@ -125,23 +132,25 @@ class RecommendationsService(
         val content = response.choices.firstOrNull()?.message?.content
             ?: throw RuntimeException("ChatGPT returned no content")
 
-        // Step 6: Clean and parse the JSON
         val cleanedJson = content.replace("```json", "").replace("```", "").trim()
-
         val mapper = jacksonObjectMapper()
         val parsed = mapper.readValue<Map<String, Any>>(cleanedJson)
 
         val message = parsed["message"] as? String
             ?: throw IllegalStateException("Missing message in ChatGPT response")
 
-        val offerIds = (parsed["offerIds"] as? List<*>)?.mapNotNull { it.toString().toLongOrNull() }
+        val offerIdsFromChatGPT = (parsed["offerIds"] as? List<*>)?.mapNotNull { it.toString().toLongOrNull() }
             ?: emptyList()
+
+        // Final offers to return
+        val selectedOffers = relevantOffers.filter { it.id in offerIdsFromChatGPT }
 
         return OffersRecommendationResponse(
             message = message,
-            offerIds = offerIds
+            offers = selectedOffers
         )
     }
+
 
     fun getQuickInsights(userId: Long): QuickInsightsResponse {
         val thisMonth = transactionsService.getUserCurrentMonthCashFlow(userId)
@@ -244,7 +253,7 @@ class RecommendationsService(
 
     private fun buildBestOffersPrompt(
         categories: List<String>,
-        offers: List<OffersEntity>
+        offers: List<OfferBrief>
     ): String {
         val builder = StringBuilder()
 
@@ -258,6 +267,7 @@ class RecommendationsService(
         builder.appendLine("- Write a clear and concise message (1–2 sentences) summarizing which offers they should explore based on their spending and recommendations.")
         builder.appendLine("- DO NOT list every offer. Pick only the most relevant ones across all categories.")
         builder.appendLine("- Keep the tone helpful, positive, and brief.")
+        builder.appendLine("- Do NOT mention IDs of offers in the description")
         builder.appendLine("- Only recommend actual NBK offers provided below.")
         builder.appendLine("- When referencing money, write values like this: '10KD'.")
         builder.appendLine("- Avoid using special characters, emojis, or HTML tags.")
@@ -278,8 +288,9 @@ class RecommendationsService(
         builder.appendLine()
         builder.appendLine("Here are the NBK offers grouped by MCC category:")
 
-        offers.groupBy { it.mccCategoryId }.forEach { (mccId, offerGroup) ->
-            builder.appendLine("Offers for MCC ID $mccId:")
+        builder.appendLine("\nHere are the NBK offers grouped by subcategory:")
+        offers.groupBy { it.subCategory ?: "General" }.forEach { (subCat, offerGroup) ->
+            builder.appendLine("Offers for $subCat:")
             offerGroup.forEach { offer ->
                 builder.appendLine("- ID ${offer.id}: ${offer.description}")
             }

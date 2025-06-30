@@ -18,7 +18,18 @@ data class Choice(val message: Message)
 
 data class OffersRecommendationResponse(
     val message: String,
-    val offerIds: List<Long>
+    val offers: List<OfferBrief>
+)
+
+data class OfferBrief(
+    val id: Long?,
+    val description: String,
+    val subCategory: String?
+)
+
+data class OfferResponse(
+    val id: Long? = null,
+    val description: String
 )
 
 data class QuickInsightsResponse(
@@ -26,3 +37,5 @@ data class QuickInsightsResponse(
     val budgetLimitWarning: String,
     val savingInsights: String
 )
+
+
