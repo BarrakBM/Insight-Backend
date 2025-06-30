@@ -12,7 +12,6 @@ interface LimitsRepository:JpaRepository<LimitsEntity,Long>{
     fun findAllByAccountId(accountId: Long): List<LimitsEntity>?
     fun findByAccountIdAndCategory(accountId: Long, category: String): LimitsEntity?
     fun findAllByRenewsAtBefore(date: LocalDate): List<LimitsEntity>
-
 }
 
 @Entity
@@ -22,13 +21,14 @@ data class LimitsEntity(
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Long? = null,
     val category: String,
-    val amount: BigDecimal,
+    var amount: BigDecimal, // CHANGED: Made this var instead of val
     val accountId: Long,
     var isActive: Boolean = true,
     val createdAt: LocalDate = LocalDate.now(),
-    var renewsAt: LocalDate = LocalDate.now().plusMonths(1)
+    var renewsAt: LocalDate = LocalDate.now().plusMonths(1) // CHANGED: Made this var instead of val
 ){
     constructor(): this(0, "", BigDecimal.ZERO, 0)
+
     @PrePersist
     @PreUpdate
     fun validateAmount() {
@@ -36,5 +36,4 @@ data class LimitsEntity(
             throw IllegalArgumentException("Amount cannot be negative")
         }
     }
-
 }

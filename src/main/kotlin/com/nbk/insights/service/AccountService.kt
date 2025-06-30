@@ -83,19 +83,62 @@ class AccountService(
             throw IllegalAccessException("User ID mismatch")
         }
 
+        // Check if there's an existing limit for this category and account
         val existingLimit = limitsRepository.findByAccountIdAndCategory(accountId, category)
 
-        val newLimit = existingLimit?.copy(
-            amount = amount,
-            renewsAt = renewsAt ?: calculateNextRenewalDate()
-        ) ?: LimitsEntity(
-            category = category,
-            amount = amount,
-            accountId = accountId,
-            renewsAt = renewsAt ?: calculateNextRenewalDate()
-        )
+        if (existingLimit != null) {
+            // Update the existing limit by modifying its properties
+            existingLimit.amount = amount
+            existingLimit.renewsAt = renewsAt ?: calculateNextRenewalDate()
+            existingLimit.isActive = true // Reactivate if it was deactivated
+            limitsRepository.save(existingLimit)
+        } else {
+            // Create a new limit
+            val newLimit = LimitsEntity(
+                category = category,
+                amount = amount,
+                accountId = accountId,
+                renewsAt = renewsAt ?: calculateNextRenewalDate()
+            )
+            limitsRepository.save(newLimit)
+        }
+    }
 
-        limitsRepository.save(newLimit)
+    // ADD THIS NEW METHOD FOR UPDATING SPECIFIC LIMITS
+    fun updateAccountLimit(
+        userId: Long,
+        limitId: Long,
+        category: String,
+        amount: BigDecimal,
+        accountId: Long,
+        renewsAt: LocalDate?
+    ) {
+        // Verify the account belongs to the user
+        val account = accountRepository.findById(accountId).orElseThrow {
+            EntityNotFoundException("Account with ID $accountId not found")
+        }
+
+        if (account.userId != userId) {
+            throw IllegalAccessException("User ID mismatch")
+        }
+
+        // Find the specific limit to update
+        val limitEntity = limitsRepository.findById(limitId).orElseThrow {
+            EntityNotFoundException("Limit with ID $limitId not found")
+        }
+
+        // Verify the limit belongs to the correct account
+        if (limitEntity.accountId != accountId) {
+            throw IllegalAccessException("Limit does not belong to the specified account")
+        }
+
+        // Update the limit properties directly (don't use copy())
+        limitEntity.amount = amount
+        limitEntity.renewsAt = renewsAt ?: calculateNextRenewalDate()
+        limitEntity.isActive = true // Ensure it's active
+
+        // Save the updated entity
+        limitsRepository.save(limitEntity)
     }
 
     fun retrieveAccountLimits(userId: Long, accountId: Long): ListOfLimitsResponse {
@@ -141,6 +184,7 @@ class AccountService(
         val limitEntity = limitsRepository.findById(limitId)
             .orElseThrow { IllegalArgumentException("Limit not found") }
 
+        // Update the isActive flag directly
         limitEntity.isActive = false
         limitsRepository.save(limitEntity)
     }
