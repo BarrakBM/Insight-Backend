@@ -279,8 +279,8 @@ class LimitsService(
             throw IllegalAccessException("User ID mismatch")
         }
 
-        val accountLimits = limitsRepository.findAllByAccountId(accountId)
-            ?.filter { it.isActive && isCurrentPeriod(it.renewsAt) }
+        val accountLimits = limitsRepository.findAllByAccountId(account.id!!)
+            ?.filter { it.isActive }
             ?: emptyList()
 
         val categoryAdherences = accountLimits.map { limit ->

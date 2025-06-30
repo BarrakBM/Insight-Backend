@@ -46,7 +46,27 @@ class AccountController(
             renewsAt = request.renewsAt
         )
         return ResponseEntity.ok(mapOf("message" to "limit set successfully"))
+    }
 
+    // ADD THIS NEW ENDPOINT FOR UPDATING LIMITS
+    @PutMapping("/limit/{limitId}")
+    fun updateAccountLimit(
+        @PathVariable limitId: Long,
+        @RequestBody request: LimitsRequest
+    ): ResponseEntity<Map<String, String>?> {
+        val username = SecurityContextHolder.getContext().authentication.name
+        val userId = userRepository.findByUsername(username)?.id
+            ?: throw UsernameNotFoundException("User not found with username: $username")
+
+        accountService.updateAccountLimit(
+            userId = userId,
+            limitId = limitId,
+            category = request.category,
+            amount = request.amount,
+            accountId = request.accountId,
+            renewsAt = request.renewsAt
+        )
+        return ResponseEntity.ok(mapOf("message" to "limit updated successfully"))
     }
 
     @GetMapping("/limits/{accountId}")
@@ -57,7 +77,6 @@ class AccountController(
         val limits = accountService.retrieveAccountLimits(userId = userId, accountId = accountId)
         return ResponseEntity.ok(limits)
     }
-
 
     @PostMapping("/limits/deactivate/{limitId}")
     fun deactivateLimit(@PathVariable limitId: Long): ResponseEntity<Map<String, String>?> {
