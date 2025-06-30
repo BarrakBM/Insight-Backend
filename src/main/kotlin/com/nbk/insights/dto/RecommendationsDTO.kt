@@ -24,12 +24,15 @@ data class OffersRecommendationResponse(
 data class OfferBrief(
     val id: Long?,
     val description: String,
-    val subCategory: String?
+    val subCategory: String?,
+    val imageUrl: String? = null
 )
 
 data class OfferResponse(
     val id: Long? = null,
-    val description: String
+    val description: String,
+    val subCategory: String? = null,
+    val imageUrl: String? = null
 )
 
 data class QuickInsightsResponse(

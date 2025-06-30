@@ -101,16 +101,8 @@ class RecommendationsService(
             Regex("""\[(.*?)]""").find(it.reason)?.groupValues?.get(1)
         }.distinct()
 
-        // Fetch offer details with subcategory
-        val relevantOffers = offersRepository.findAllByMccCategories(categories).mapNotNull { offerEntity ->
-            val mccEntity = mccRepository.findById(offerEntity.mccCategoryId).orElse(null)
-            OfferBrief(
-                id = offerEntity.id,
-                description = offerEntity.description,
-                subCategory = mccEntity?.subCategory
-            )
-        }
-
+        // This now automatically includes imageUrl
+        val relevantOffers = offersRepository.findOfferBriefsByCategories(categories)
 
         val prompt = buildBestOffersPrompt(categories, relevantOffers)
 
