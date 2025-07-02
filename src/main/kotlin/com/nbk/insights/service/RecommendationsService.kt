@@ -497,7 +497,12 @@ class RecommendationsService(
             builder.appendLine("Offers for MCC ID $mcc:\n- $descriptions\n")
         }
 
-        builder.appendLine("\nHere's the user's budget data:")
+        builder.appendLine("\nHere's the user's budget data and make sure when returning the Category variable they MUST be one of the following and make sure they are exactly the same its case sensitive if not then change it to what it should be here they are:")
+        builder.appendLine("Dining (if you see DINING change it to this" +
+                "Entertainment (if you see ENTERTAINMENT change it to this))" +
+                "Shopping (if you see SHOPPING change it to this)" +
+                "Food & Groceries (if you see FOOD_AND_GROCERIES change it to this)" +
+                "Other (if you see OTHER change it to this)")
         adherences.forEach {
             builder.appendLine("""
             {
@@ -548,7 +553,7 @@ class RecommendationsService(
         builder.appendLine("- Only recommend actual NBK offers provided below.")
         builder.appendLine("- When referencing money, write values like this: 'KD 10'.")
         builder.appendLine("- Avoid using special characters, emojis, or HTML tags.")
-        builder.appendLine("- Prioritize relevance over quantity — the goal is to highlight the *best-fit* offers.")
+        builder.appendLine("- Prioritize relevance over quantity — the goal is to highlight the *best-fit* offers. And try to pick one or two of each category if possible and does not return too many offers no more than 6-8 offers")
         builder.appendLine()
         builder.appendLine("Output format (in JSON):")
         builder.appendLine(

@@ -213,21 +213,17 @@ class FallbackRecommendationService(
 
     private fun getCategoryTip(category: String, situation: String): String {
         val tips = mapOf(
-            "DINING" to mapOf(
+            "Dining" to mapOf(
                 "overspent" to "Consider cooking at home more often or use NBK dining offers.",
                 "underspent" to "Great control on dining expenses!"
             ),
-            "SHOPPING" to mapOf(
+            "Shopping" to mapOf(
                 "overspent" to "Make a list before shopping and look for NBK retail partner discounts.",
                 "underspent" to "Smart shopping habits! Keep it up."
             ),
-            "ENTERTAINMENT" to mapOf(
+            "Entertainment" to mapOf(
                 "overspent" to "Look for free events or NBK entertainment partner offers.",
                 "underspent" to "Well balanced entertainment budget!"
-            ),
-            "TRANSPORT" to mapOf(
-                "overspent" to "Consider carpooling or public transport options.",
-                "underspent" to "Efficient transport spending!"
             )
         )
 
