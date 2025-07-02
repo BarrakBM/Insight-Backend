@@ -68,16 +68,24 @@ class RecommendationsService(
     fun getCategoryRecommendations(userId: Long): List<CategoryRecommendationResponse> {
         val schedule = getOrCreateSchedule(userId, RecommendationType.CATEGORY)
 
-        if (!shouldGenerateCategoryRecommendations(userId, schedule)) {
-            loggerRecommendationCategory.info("Not time yet for category recommendations for userId=$userId")
+//        if (!shouldGenerateCategoryRecommendations(userId, schedule)) {
+//            loggerRecommendationCategory.info("Not time yet for category recommendations for userId=$userId")
+//
+//            val categoryCache = serverInsightsCache.getMap<Long, List<CategoryRecommendationResponse>>("recommendation-category")
+//            categoryCache[userId]?.let {
+//                loggerRecommendationCategory.info("Returning cached category recommendations for userId=$userId")
+//                return it
+//            }
+//
+//            return emptyList()
+//        }
 
-            val categoryCache = serverInsightsCache.getMap<Long, List<CategoryRecommendationResponse>>("recommendation-category")
-            categoryCache[userId]?.let {
-                loggerRecommendationCategory.info("Returning cached category recommendations for userId=$userId")
-                return it
-            }
+        loggerRecommendationCategory.info("Not time yet for category recommendations for userId=$userId")
 
-            return emptyList()
+        val categoryCache = serverInsightsCache.getMap<Long, List<CategoryRecommendationResponse>>("recommendation-category")
+        categoryCache[userId]?.let {
+            loggerRecommendationCategory.info("Returning cached category recommendations for userId=$userId")
+            return it
         }
 
         // Generate new recommendations
@@ -143,7 +151,7 @@ class RecommendationsService(
         updateCategorySchedule(userId, schedule, budgetAdherence)
 
         // Cache the result
-        val categoryCache = serverInsightsCache.getMap<Long, List<CategoryRecommendationResponse>>("recommendation-category")
+        //val categoryCache = serverInsightsCache.getMap<Long, List<CategoryRecommendationResponse>>("recommendation-category")
         categoryCache[userId] = result
 
         loggerRecommendationCategory.info("Generated recommendations for userId=$userId (fallback=${!circuitBreaker.isAvailable()})")
@@ -153,19 +161,27 @@ class RecommendationsService(
     fun getOffersRecommendation(userId: Long): OffersRecommendationResponse {
         val schedule = getOrCreateSchedule(userId, RecommendationType.OFFERS)
 
-        if (!shouldGenerateRecommendations(schedule)) {
-            loggerRecommendationOffers.info("Not time yet for offer recommendations for userId=$userId")
+//        if (!shouldGenerateRecommendations(schedule)) {
+//            loggerRecommendationOffers.info("Not time yet for offer recommendations for userId=$userId")
+//
+//            val recommendationCache = serverInsightsCache.getMap<Long, OffersRecommendationResponse>("recommendation-offers")
+//            recommendationCache[userId]?.let {
+//                loggerRecommendationOffers.info("Returning cached offer recommendations for userId=$userId")
+//                return it
+//            }
+//
+//            return OffersRecommendationResponse(
+//                message = "Check back next week for personalized NBK offers tailored to your spending!",
+//                offers = emptyList()
+//            )
+//        }
 
-            val recommendationCache = serverInsightsCache.getMap<Long, OffersRecommendationResponse>("recommendation-offers")
-            recommendationCache[userId]?.let {
-                loggerRecommendationOffers.info("Returning cached offer recommendations for userId=$userId")
-                return it
-            }
+        loggerRecommendationOffers.info("Not time yet for offer recommendations for userId=$userId")
 
-            return OffersRecommendationResponse(
-                message = "Check back next week for personalized NBK offers tailored to your spending!",
-                offers = emptyList()
-            )
+        val recommendationCache = serverInsightsCache.getMap<Long, OffersRecommendationResponse>("recommendation-offers")
+        recommendationCache[userId]?.let {
+            loggerRecommendationOffers.info("Returning cached offer recommendations for userId=$userId")
+            return it
         }
 
         val latestRecommendations = recommendationRepository.findLatestRecommendationsPerCategory(userId)
@@ -207,7 +223,7 @@ class RecommendationsService(
         recommendationScheduleRepository.save(schedule)
 
         // Cache the result
-        val recommendationCache = serverInsightsCache.getMap<Long, OffersRecommendationResponse>("recommendation-offers")
+        //val recommendationCache = serverInsightsCache.getMap<Long, OffersRecommendationResponse>("recommendation-offers")
         recommendationCache[userId] = offerResponse
 
         return offerResponse
@@ -216,20 +232,26 @@ class RecommendationsService(
     fun getQuickInsights(userId: Long): QuickInsightsResponse {
         val schedule = getOrCreateSchedule(userId, RecommendationType.QUICK_INSIGHTS)
 
-        if (!shouldGenerateRecommendations(schedule)) {
-            loggerQuickInsights.info("Not time yet for quick insights for userId=$userId")
+//        if (!shouldGenerateRecommendations(schedule)) {
+//            loggerQuickInsights.info("Not time yet for quick insights for userId=$userId")
+//
+//            val insightsCache = serverInsightsCache.getMap<Long, QuickInsightsResponse>("quick-insights")
+//            insightsCache[userId]?.let {
+//                loggerQuickInsights.info("Returning cached quick insights for userId=$userId")
+//                return it
+//            }
+//
+//            return QuickInsightsResponse(
+//                spendingComparedToLastMonth = "Check back tomorrow for updated spending comparisons",
+//                budgetLimitWarning = "Your budget insights will refresh daily",
+//                savingInsights = "New savings insights available tomorrow"
+//            )
+//        }
 
-            val insightsCache = serverInsightsCache.getMap<Long, QuickInsightsResponse>("quick-insights")
-            insightsCache[userId]?.let {
-                loggerQuickInsights.info("Returning cached quick insights for userId=$userId")
-                return it
-            }
-
-            return QuickInsightsResponse(
-                spendingComparedToLastMonth = "Check back tomorrow for updated spending comparisons",
-                budgetLimitWarning = "Your budget insights will refresh daily",
-                savingInsights = "New savings insights available tomorrow"
-            )
+        val insightsCache = serverInsightsCache.getMap<Long, QuickInsightsResponse>("quick-insights")
+        insightsCache[userId]?.let {
+            loggerQuickInsights.info("Returning cached quick insights for userId=$userId")
+            return it
         }
 
         val thisMonth = transactionsService.getUserCurrentMonthCashFlow(userId)
@@ -260,7 +282,7 @@ class RecommendationsService(
         recommendationScheduleRepository.save(schedule)
 
         // Cache the result
-        val insightsCache = serverInsightsCache.getMap<Long, QuickInsightsResponse>("quick-insights")
+        //val insightsCache = serverInsightsCache.getMap<Long, QuickInsightsResponse>("quick-insights")
         insightsCache[userId] = insights
 
         return insights
