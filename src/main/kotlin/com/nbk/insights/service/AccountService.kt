@@ -1,15 +1,19 @@
 package com.nbk.insights.service
 
+import com.hazelcast.logging.Logger
 import com.nbk.insights.dto.*
 import com.nbk.insights.repository.AccountRepository
 import com.nbk.insights.repository.LimitsEntity
 import com.nbk.insights.repository.LimitsRepository
 import com.nbk.insights.repository.UserRepository
+import com.nbk.insights.serverInsightsCache
 import jakarta.persistence.EntityNotFoundException
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Service
 import java.math.BigDecimal
 import java.time.LocalDate
+
+private val loggerUserAccounts = Logger.getLogger("accounts-user")
 
 @Service
 class AccountService(
@@ -19,6 +23,14 @@ class AccountService(
 ) {
 
     fun retrieveUserAccounts(userId: Long): AccountsResponse {
+
+        val accountCache = serverInsightsCache.getMap<Long, AccountsResponse>("transactions-user")
+
+        accountCache[userId]?.let {
+            loggerUserAccounts.info("Returning cached user accounts for userId=$userId")
+            return it
+        }
+
         if (userId <= 0) {
             throw IllegalArgumentException("Invalid user ID: must be positive.")
         }
@@ -44,6 +56,8 @@ class AccountService(
             )
         }
 
+        loggerUserAccounts.info("No account(s) found, caching new data...")
+        accountCache[userId] = AccountsResponse(accounts)
         return AccountsResponse(accounts)
     }
 

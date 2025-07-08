@@ -16,6 +16,9 @@ fun main(args: Array<String>) {
 	insightsCacheConfig.getMapConfig("transactions-user").setTimeToLiveSeconds(360)
 	insightsCacheConfig.getMapConfig("transactions-account").setTimeToLiveSeconds(360)
 
+	// Accounts caches - 6 minutes TTL
+	insightsCacheConfig.getMapConfig("accounts-user").setTimeToLiveSeconds(360)
+
 	// Category recommendations - 28-31 days (will be checked by schedule)
 	insightsCacheConfig.getMapConfig("recommendation-category").setTimeToLiveSeconds(2592000)
 
